@@ -20,4 +20,10 @@ class AgentRouterTest {
     fun usesGeneralAgentForNormalConversation() {
         assertEquals(AgentType.GENERAL, AgentRouter.route("నమస్కారం, ఎలా ఉన్నావు?"))
     }
+
+    @Test
+    fun routesYoutubeVideoSearchAndCreatorRequests() {
+        assertEquals(AgentType.VIDEO, AgentRouter.route("Search the web for YouTube videos about Kotlin"))
+        assertEquals(AgentType.CREATOR, AgentRouter.route("Create a Telugu YouTube Shorts script"))
+    }
 }
