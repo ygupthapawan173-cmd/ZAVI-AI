@@ -56,6 +56,10 @@ class ConversationStore(private val preferences: SharedPreferences) {
         preferences.edit().remove(KEY_MESSAGES).apply()
     }
 
+    fun clearMemory() {
+        preferences.edit().remove(KEY_MEMORY).apply()
+    }
+
     companion object {
         private const val KEY_MESSAGES = "zavi_chat_messages"
         private const val KEY_MEMORY = "zavi_user_memory"
