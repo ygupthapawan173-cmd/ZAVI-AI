@@ -6,6 +6,9 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import ai.zavi.assistant.data.TeluguOcrEngine
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.File
 import android.os.Bundle
 import android.speech.RecognitionListener
@@ -402,6 +405,19 @@ private fun ZaviApp(
                 voiceStatus = error.message ?: "Document could not be read."
             }
         }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                handsFreeMode = false
+                stopVoice()
+                voiceStatus = "App backgroundలోకి వెళ్లింది. Hey ZAVI microphone ఆపివేశాను."
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val micPermission = rememberLauncherForActivityResult(
