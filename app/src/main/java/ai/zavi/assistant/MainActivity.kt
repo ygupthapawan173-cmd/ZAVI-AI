@@ -58,6 +58,10 @@ import ai.zavi.assistant.network.MultiProviderClient
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
@@ -115,6 +119,7 @@ class MainActivity : ComponentActivity() {
                 },
                 launchDeviceAction = { action -> DeviceActionLauncher.launch(this, action) },
                 startVoice = { onResult, onError -> startVoiceRecognition(onResult, onError) },
+                stopVoice = { stopVoiceRecognition() },
                 speak = { speakText(it) },
                 requestNotificationPermission = {
                     if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -139,6 +144,14 @@ class MainActivity : ComponentActivity() {
                 }
             )
         }
+    }
+
+    private fun stopVoiceRecognition() {
+        speechRecognizer?.cancel()
+        speechRecognizer?.destroy()
+        speechRecognizer = null
+        speechResult = null
+        speechError = null
     }
 
     @Suppress("DEPRECATION")
@@ -315,6 +328,7 @@ private fun ZaviApp(
     ask: suspend (String, List<ChatMessage>, String, String) -> AgentReply,
     launchDeviceAction: (DeviceAction) -> String,
     startVoice: ((String) -> Unit, (String) -> Unit) -> Unit,
+    stopVoice: () -> Unit,
     speak: (String) -> Unit,
     shareChat: (List<ChatMessage>) -> Unit,
     requestNotificationPermission: () -> Unit,
@@ -338,6 +352,7 @@ private fun ZaviApp(
     var reminderDaily by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var voiceReplies by remember { mutableStateOf(false) }
+    var handsFreeMode by remember { mutableStateOf(false) }
     var voiceStatus by remember { mutableStateOf("") }
     var pendingAction by remember { mutableStateOf<DeviceAction?>(null) }
     val lines = remember { mutableStateListOf<ChatMessage>().apply { addAll(loadMessages()) } }
@@ -393,16 +408,67 @@ private fun ZaviApp(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            voiceStatus = "వింటున్నాను…"
-            startVoice(
-                { recognized ->
-                    prompt = recognized
-                    voiceStatus = "Voice input ready — Send నొక్కి కొనసాగించండి."
-                },
-                { error -> voiceStatus = error }
-            )
+            handsFreeMode = true
+            voiceReplies = true
+            voiceStatus = "Hey ZAVI కోసం వింటున్నాను…"
         } else {
-            voiceStatus = "Voice input కోసం microphone permission అవసరం."
+            handsFreeMode = false
+            voiceStatus = "Wake Word కోసం microphone permission అవసరం."
+        }
+    }
+
+    LaunchedEffect(handsFreeMode) {
+        if (handsFreeMode) {
+            var wakeDetected = false
+            while (isActive && handsFreeMode) {
+                voiceStatus = if (wakeDetected) "చెప్పండి… command వింటున్నాను" else "Hey ZAVI కోసం వింటున్నాను…"
+                val heard = suspendCancellableCoroutine<String?> { continuation ->
+                    startVoice(
+                        { result -> if (continuation.isActive) continuation.resume(result) },
+                        { _ -> if (continuation.isActive) continuation.resume(null) }
+                    )
+                    continuation.invokeOnCancellation { stopVoice() }
+                }
+                if (!isActive || !handsFreeMode) break
+                if (heard.isNullOrBlank()) {
+                    delay(350)
+                    continue
+                }
+                val normalized = heard.lowercase().replace(Regex("[^\\p{L}\\p{N} ]"), " ").trim()
+                if (!wakeDetected) {
+                    val wakeWords = listOf("hey zavi", "hey zavi", "hey savvy", "హే జావి", "హే జావీ", "హే జావి")
+                    if (wakeWords.any { normalized.contains(it) }) {
+                        wakeDetected = true
+                        speak("చెప్పండి")
+                    }
+                } else {
+                    if (normalized.contains("stop listening") || normalized.contains("స్టాప్ లిజనింగ్") || normalized.contains("ఆపు")) {
+                        handsFreeMode = false
+                        voiceStatus = "Wake Word mode ఆపివేశాను."
+                    } else {
+                        val command = heard.trim()
+                        lines.add(ChatMessage(role = "user", content = command))
+                        saveMessages(lines.toList())
+                        busy = true
+                        try {
+                            val reply = ask(command, lines.dropLast(1), loadMemory(), "")
+                            lines.add(ChatMessage(role = "assistant", content = reply.text, agent = reply.agent))
+                            saveMessages(lines.toList())
+                            if (reply.text.isNotBlank()) speak(reply.text)
+                        } catch (error: Exception) {
+                            val message = error.message ?: "Voice request failed"
+                            lines.add(ChatMessage(role = "assistant", content = message))
+                            saveMessages(lines.toList())
+                            speak(message)
+                        } finally {
+                            busy = false
+                        }
+                    }
+                    wakeDetected = false
+                }
+                delay(300)
+            }
+            stopVoice()
         }
     }
 
@@ -448,6 +514,17 @@ private fun ZaviApp(
                         }
                     }
                     Column(horizontalAlignment = Alignment.End) {
+                        TextButton(onClick = {
+                            if (handsFreeMode) {
+                                handsFreeMode = false
+                                stopVoice()
+                                voiceStatus = "Wake Word mode ఆపివేశాను."
+                            } else {
+                                micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        }) {
+                            Text(if (handsFreeMode) "🟢 Hey ZAVI ON" else "🎙 Hey ZAVI", color = if (handsFreeMode) Color(0xFF86EFAC) else Color(0xFF67E8F9), fontSize = 11.sp)
+                        }
                         TextButton(onClick = { voiceReplies = !voiceReplies }) {
                             Text(if (voiceReplies) "🔊 Voice ON" else "🔇 Voice OFF", color = Color(0xFF67E8F9), fontSize = 11.sp)
                         }
