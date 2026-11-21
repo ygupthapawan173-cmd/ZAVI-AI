@@ -2,6 +2,7 @@ package ai.zavi.assistant
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -17,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
@@ -36,6 +38,8 @@ import ai.zavi.assistant.core.DeviceAction
 import ai.zavi.assistant.core.DeviceActionLauncher
 import ai.zavi.assistant.core.DeviceActionPlanner
 import ai.zavi.assistant.data.ConversationStore
+import ai.zavi.assistant.data.DocumentTextExtractor
+import ai.zavi.assistant.data.ImportedDocument
 import ai.zavi.assistant.models.ChatMessage
 import ai.zavi.assistant.network.AiProvider
 import ai.zavi.assistant.network.ProviderConfig
@@ -83,6 +87,7 @@ class MainActivity : ComponentActivity() {
                 loadProviders = { loadProviderConfigs() },
                 saveProviders = { saveProviderConfigs(it) },
                 testProvider = { multiProviderClient.test(it) },
+                readDocument = { uri -> DocumentTextExtractor.read(this, uri) },
                 loadMemory = { conversationStore.loadMemory() },
                 saveMemory = { conversationStore.saveMemory(it) },
                 loadMessages = { conversationStore.loadMessages() },
@@ -258,6 +263,7 @@ private fun ZaviApp(
     loadProviders: () -> List<ProviderConfig>,
     saveProviders: (List<ProviderConfig>) -> Unit,
     testProvider: suspend (ProviderConfig) -> String,
+    readDocument: (Uri) -> ImportedDocument,
     loadMemory: () -> String,
     saveMemory: (String) -> Unit,
     loadMessages: () -> List<ChatMessage>,
@@ -271,6 +277,7 @@ private fun ZaviApp(
     shareChat: (List<ChatMessage>) -> Unit
 ) {
     var prompt by remember { mutableStateOf("") }
+    var attachedDocument by remember { mutableStateOf<ImportedDocument?>(null) }
     var providers by remember { mutableStateOf(loadProviders()) }
     var providerTestStatus by remember { mutableStateOf("") }
     var memory by remember { mutableStateOf(loadMemory()) }
@@ -281,6 +288,19 @@ private fun ZaviApp(
     var pendingAction by remember { mutableStateOf<DeviceAction?>(null) }
     val lines = remember { mutableStateListOf<ChatMessage>().apply { addAll(loadMessages()) } }
     val scope = rememberCoroutineScope()
+    val documentPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                attachedDocument = readDocument(uri)
+                voiceStatus = "Document attached and ready"
+            } catch (error: Exception) {
+                voiceStatus = error.message ?: "Document could not be read."
+            }
+        }
+    }
+
     val micPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -393,6 +413,12 @@ private fun ZaviApp(
                         .background(Color(0xFF20243A), RoundedCornerShape(24.dp))
                         .padding(horizontal = 8.dp, vertical = 6.dp)
                 ) {
+                    IconButton(
+                        onClick = { documentPicker.launch(arrayOf("application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain", "text/markdown", "text/csv", "application/json", "application/xml", "text/html")) },
+                        enabled = !busy
+                    ) {
+                        Icon(Icons.Default.AttachFile, contentDescription = "Attach document", tint = Color(0xFFC084FC))
+                    }
                     TextField(
                         value = prompt,
                         onValueChange = { prompt = it },
@@ -418,7 +444,8 @@ private fun ZaviApp(
                     IconButton(
                         onClick = {
                             val query = prompt.trim()
-                            if (query.isNotEmpty() && !busy) {
+                            val document = attachedDocument
+                            if ((query.isNotEmpty() || document != null) && !busy) {
                                 val action = DeviceActionPlanner.plan(query)
                                 val calculation = if (action == null) CalculatorEngine.tryCalculate(query) else null
                                 when {
@@ -438,14 +465,21 @@ private fun ZaviApp(
                                     }
                                     else -> {
                                         val previousHistory = lines.toList()
-                                        lines.add(ChatMessage(role = "user", content = query))
+                                        val visiblePrompt = (query.ifBlank { "Analyze this document" }) +
+                                            if (document != null) "\n📎 " + document.name else ""
+                                        val aiPrompt = if (document != null) {
+                                            query + "\n\nDOCUMENT CONTENT (" + document.name + "):\n" + document.text +
+                                                "\n\nUser request: " + query.ifBlank { "Summarize this document, explain key points, and answer in Telugu." }
+                                        } else query
+                                        lines.add(ChatMessage(role = "user", content = visiblePrompt))
                                         saveMessages(lines.toList())
                                         prompt = ""
+                                        attachedDocument = null
                                         voiceStatus = ""
                                         busy = true
                                         scope.launch {
                                             try {
-                                                val reply = ask(query, previousHistory, loadMemory(), "")
+                                                val reply = ask(aiPrompt, previousHistory, loadMemory(), "")
                                                 lines.add(
                                                     ChatMessage(
                                                         role = "assistant",
