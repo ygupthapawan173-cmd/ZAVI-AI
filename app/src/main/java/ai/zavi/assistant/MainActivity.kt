@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import ai.zavi.assistant.core.AgentWorkflow
+import ai.zavi.assistant.core.CalculatorEngine
 import ai.zavi.assistant.core.DeviceAction
 import ai.zavi.assistant.core.DeviceActionLauncher
 import ai.zavi.assistant.core.DeviceActionPlanner
