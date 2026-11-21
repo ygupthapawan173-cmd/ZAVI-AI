@@ -22,6 +22,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -411,26 +412,26 @@ private fun ZaviApp(
         }
     }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) {
-                handsFreeMode = false
-                stopVoice()
-                voiceStatus = "App backgroundలోకి వెళ్లింది. Hey ZAVI microphone ఆపివేశాను."
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
+    // Voice mode is explicitly user-controlled and is kept alive by the microphone foreground service.
 
     val micPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            handsFreeMode = true
-            voiceReplies = true
-            voiceStatus = "Hey ZAVI కోసం వింటున్నాను…"
+            try {
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, ZaviVoiceForegroundService::class.java).apply {
+                        action = ZaviVoiceForegroundService.ACTION_START
+                    }
+                )
+                handsFreeMode = true
+                voiceReplies = true
+                voiceStatus = "Hey ZAVI background voice ON. Notificationలో Stop నొక్కి ఆపవచ్చు."
+            } catch (error: Exception) {
+                handsFreeMode = false
+                voiceStatus = "Background voice ప్రారంభం కాలేదు: ${error.message ?: "Foreground service error"}"
+            }
         } else {
             handsFreeMode = false
             voiceStatus = "Wake Word కోసం microphone permission అవసరం."
@@ -500,6 +501,7 @@ private fun ZaviApp(
                 }
                 if (command.lowercase().contains("stop listening") || command.contains("ఆపు")) {
                     handsFreeMode = false
+                    context.stopService(Intent(context, ZaviVoiceForegroundService::class.java))
                     voiceStatus = "Hey ZAVI listening ఆపివేశాను."
                     break
                 }
@@ -609,6 +611,7 @@ private fun ZaviApp(
                             if (handsFreeMode) {
                                 handsFreeMode = false
                                 stopVoice()
+                                context.stopService(Intent(context, ZaviVoiceForegroundService::class.java))
                                 voiceStatus = "Wake Word mode ఆపివేశాను."
                             } else {
                                 micPermission.launch(Manifest.permission.RECORD_AUDIO)
