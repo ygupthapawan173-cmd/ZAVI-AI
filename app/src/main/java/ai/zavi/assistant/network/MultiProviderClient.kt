@@ -119,6 +119,7 @@ class MultiProviderClient(
         val triggers = listOf(
             "latest", "today", "current", "right now", "news", "live", "search web",
             "search internet", "look up", "recent update", "current price", "weather",
+            "youtube", "video search", "find videos", "youtube videos",
             "తాజా", "ఈరోజు", "ఇప్పటి", "ప్రస్తుతం", "వార్తలు", "వెతుకు", "సెర్చ్ చేయి"
         )
         return triggers.any { q.contains(it) }
