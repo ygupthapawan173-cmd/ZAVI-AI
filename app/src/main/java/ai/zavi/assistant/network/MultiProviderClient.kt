@@ -52,7 +52,8 @@ class MultiProviderClient(
                 }
             } else messages
 
-            val orchestrationRequested = shouldOrchestrate(query)
+            val containsImage = query.contains("[[ZAVI_IMAGE:")
+            val orchestrationRequested = shouldOrchestrate(query) && !containsImage
             if (orchestrationRequested) {
                 return@withContext runOrchestrated(active, groundedMessages)
             }
@@ -123,6 +124,16 @@ class MultiProviderClient(
         return triggers.any { q.contains(it) }
     }
 
+
+    private fun extractImage(content: String): Pair<String, String>? {
+        val match = Regex("\\[\\[ZAVI_IMAGE:([^:]+):([A-Za-z0-9+/=]+)\\]\\]").find(content)
+            ?: return null
+        return match.groupValues[1] to match.groupValues[2]
+    }
+
+    private fun stripImageMarker(content: String): String =
+        content.replace(Regex("\\[\\[ZAVI_IMAGE:[^:]+:[A-Za-z0-9+/=]+\\]\\]"), "").trim()
+
     suspend fun test(config: ProviderConfig): String = withContext(Dispatchers.IO) {
         require(config.apiKey.isNotBlank()) { "${config.provider.title} API key add చేయండి." }
         request(config, listOf(OpenRouterMessage("user", "Reply with exactly: ZAVI connection OK")))
@@ -135,8 +146,15 @@ class MultiProviderClient(
                 val contents = JSONArray()
                 messages.filter { it.role != "system" }.forEach { message ->
                     val role = if (message.role == "assistant") "model" else "user"
-                    contents.put(JSONObject().put("role", role)
-                        .put("parts", JSONArray().put(JSONObject().put("text", message.content))))
+                    val parts = JSONArray()
+                    val image = extractImage(message.content)
+                    val text = stripImageMarker(message.content)
+                    if (text.isNotBlank()) parts.put(JSONObject().put("text", text))
+                    if (image != null) {
+                        parts.put(JSONObject().put("inlineData",
+                            JSONObject().put("mimeType", image.first).put("data", image.second)))
+                    }
+                    contents.put(JSONObject().put("role", role).put("parts", parts))
                 }
                 val system = messages.firstOrNull { it.role == "system" }?.content
                 val body = JSONObject().put("contents", contents)
@@ -148,7 +166,18 @@ class MultiProviderClient(
             }
             else -> {
                 val array = JSONArray()
-                messages.forEach { array.put(JSONObject().put("role", it.role).put("content", it.content)) }
+                messages.forEach { message ->
+                    val image = extractImage(message.content)
+                    val messageContent: Any = if (image == null) {
+                        message.content
+                    } else {
+                        JSONArray()
+                            .put(JSONObject().put("type", "text").put("text", stripImageMarker(message.content)))
+                            .put(JSONObject().put("type", "image_url").put("image_url",
+                                JSONObject().put("url", "data:" + image.first + ";base64," + image.second)))
+                    }
+                    array.put(JSONObject().put("role", message.role).put("content", messageContent))
+                }
                 val body = JSONObject().put("model", model).put("messages", array)
                     .put("temperature", 0.5).put("max_tokens", 1400)
                 val endpoint = when (config.provider) {
