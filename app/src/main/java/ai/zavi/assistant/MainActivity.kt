@@ -3,6 +3,11 @@ package ai.zavi.assistant
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
+import androidx.core.content.FileProvider
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import java.io.File
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -96,6 +101,8 @@ class MainActivity : ComponentActivity() {
                 testProvider = { multiProviderClient.test(it) },
                 readDocument = { uri -> DocumentTextExtractor.read(this, uri) },
                 readImage = { uri -> ImageAttachmentReader.read(this, uri) },
+                createCameraUri = { createCameraImageUri() },
+                recognizeImageText = { uri, success, failure -> recognizeImageText(uri, success, failure) },
                 loadMemory = { conversationStore.loadMemory() },
                 saveMemory = { conversationStore.saveMemory(it) },
                 loadMessages = { conversationStore.loadMessages() },
@@ -223,6 +230,27 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun createCameraImageUri(): Uri {
+        val directory = File(cacheDir, "camera").apply { mkdirs() }
+        val imageFile = File.createTempFile("zavi_capture_", ".jpg", directory)
+        return FileProvider.getUriForFile(this, packageName + ".fileprovider", imageFile)
+    }
+
+    private fun recognizeImageText(uri: Uri, onSuccess: (String) -> Unit, onFailure: (String) -> Unit) {
+        try {
+            val image = InputImage.fromFilePath(this, uri)
+            val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+            recognizer.process(image).addOnSuccessListener { result ->
+                recognizer.close()
+                onSuccess(result.text)
+            }.addOnFailureListener { error ->
+                recognizer.close()
+                onFailure(error.localizedMessage ?: "OCR failed")
+            }
+        } catch (error: Exception) {
+            onFailure(error.localizedMessage ?: "Image could not be opened")
+        }
+    }
     private fun loadProviderConfigs(): List<ProviderConfig> = AiProvider.values().map { provider ->
         val id = provider.name.lowercase()
         val legacyKey = if (provider == AiProvider.OPENROUTER) securePrefs.getString(KEY_OPENROUTER, "") else ""
@@ -282,6 +310,8 @@ private fun ZaviApp(
     testProvider: suspend (ProviderConfig) -> String,
     readDocument: (Uri) -> ImportedDocument,
     readImage: (Uri) -> ImportedImage,
+    createCameraUri: () -> Uri,
+    recognizeImageText: (Uri, (String) -> Unit, (String) -> Unit) -> Unit,
     loadMemory: () -> String,
     saveMemory: (String) -> Unit,
     loadMessages: () -> List<ChatMessage>,
@@ -330,6 +360,27 @@ private fun ZaviApp(
         }
     }
 
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        val uri = cameraUri
+        if (captured && uri != null) {
+            try {
+                attachedImage = readImage(uri)
+                voiceStatus = "Photo attached • Reading visible text…"
+                recognizeImageText(uri, { text ->
+                    if (text.isNotBlank()) {
+                        prompt = (prompt + "\n\nText found in photo:\n" + text).trim()
+                        voiceStatus = "Photo attached • Text extracted. Telugu image understanding depends on the selected AI model."
+                    } else {
+                        voiceStatus = "Photo attached • No readable text found. Ask ZAVI to inspect the image."
+                    }
+                }, { error -> voiceStatus = "Photo attached • OCR unavailable: " + error + ". AI image analysis is still available." })
+            } catch (error: Exception) {
+                voiceStatus = error.message ?: "Captured photo could not be attached."
+            }
+        } else { voiceStatus = "Camera capture cancelled." }
+        cameraUri = null
+    }
     val documentPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -447,6 +498,14 @@ private fun ZaviApp(
                 }
 
                 Spacer(Modifier.height(6.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = {
+                        try { val uri = createCameraUri(); cameraUri = uri; cameraLauncher.launch(uri) }
+                        catch (error: Exception) { voiceStatus = error.localizedMessage ?: "Camera could not start." }
+                    }, modifier = Modifier.weight(1f)) { Text("📷 Camera + OCR", color = Color(0xFFF0ABFC), fontSize = 11.sp) }
+                    TextButton(onClick = { prompt = "Search the web for YouTube videos about: " }, modifier = Modifier.weight(1f)) { Text("▶ YouTube", color = Color(0xFF67E8F9), fontSize = 11.sp) }
+                    TextButton(onClick = { prompt = "Create a Telugu + English YouTube Shorts script, caption and hashtags about: " }, modifier = Modifier.weight(1f)) { Text("🎬 Creator", color = Color(0xFFC084FC), fontSize = 11.sp) }
+                }
                 if (voiceStatus.isNotBlank()) {
                     Text(voiceStatus, color = Color(0xFF9CA3AF), fontSize = 11.sp)
                 }
