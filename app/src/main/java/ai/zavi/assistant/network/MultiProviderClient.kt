@@ -55,11 +55,14 @@ class MultiProviderClient(
         val model = config.model.ifBlank { config.provider.defaultModel }
         val (url, payload, keyHeader) = when (config.provider) {
             AiProvider.GEMINI -> {
-                val parts = JSONArray()
-                messages.filter { it.role != "system" }.forEach { parts.put(JSONObject().put("text", it.content)) }
+                val contents = JSONArray()
+                messages.filter { it.role != "system" }.forEach { message ->
+                    val role = if (message.role == "assistant") "model" else "user"
+                    contents.put(JSONObject().put("role", role)
+                        .put("parts", JSONArray().put(JSONObject().put("text", message.content))))
+                }
                 val system = messages.firstOrNull { it.role == "system" }?.content
-                val body = JSONObject().put("contents", JSONArray().put(JSONObject()
-                    .put("role", "user").put("parts", parts)))
+                val body = JSONObject().put("contents", contents)
                 if (!system.isNullOrBlank()) body.put("systemInstruction",
                     JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system))))
                 body.put("generationConfig", JSONObject().put("temperature", 0.5).put("maxOutputTokens", 1400))
