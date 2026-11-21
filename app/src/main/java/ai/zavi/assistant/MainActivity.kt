@@ -3,6 +3,7 @@ package ai.zavi.assistant
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import androidx.core.content.FileProvider
 import ai.zavi.assistant.data.TeluguOcrEngine
 import androidx.lifecycle.lifecycleScope
@@ -947,6 +948,21 @@ private fun ZaviApp(
                     text = {
                         Column(modifier = Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Four AI providers • keys encrypted on this device. Enable providers for automatic fallback.", fontSize = 12.sp, color = Color.Gray)
+                            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF20243A))) {
+                                Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("ZAVI Accessibility Agent", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                    Text("Enable Android Accessibility only if you want ZAVI to help with screen taps, scrolling and typing. Actions must be requested by you.", color = Color.LightGray, fontSize = 12.sp)
+                                    Button(onClick = {
+                                        try {
+                                            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                        } catch (_: Exception) {
+                                            voiceStatus = "Android Accessibility Settings తెరవలేకపోయాను."
+                                        }
+                                    }, modifier = Modifier.fillMaxWidth()) {
+                                        Text("Open Accessibility Settings")
+                                    }
+                                }
+                            }
                             providers.forEachIndexed { index, config ->
                                 Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF20243A))) {
                                     Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
