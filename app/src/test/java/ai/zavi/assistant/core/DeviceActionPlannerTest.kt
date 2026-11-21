@@ -2,6 +2,7 @@ package ai.zavi.assistant.core
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class DeviceActionPlannerTest {
@@ -28,6 +29,6 @@ class DeviceActionPlannerTest {
 
     @Test
     fun unknownCommandIsNotTreatedAsDeviceAction() {
-        assertEquals(null, DeviceActionPlanner.plan("what is artificial intelligence"))
+        assertNull(DeviceActionPlanner.plan("what is artificial intelligence"))
     }
 }
