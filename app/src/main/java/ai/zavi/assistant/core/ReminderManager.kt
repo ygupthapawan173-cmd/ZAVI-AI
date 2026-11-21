@@ -74,7 +74,7 @@ object ReminderManager {
         val work = WorkManager.getInstance(context)
         if (item.daily) {
             val request = PeriodicWorkRequestBuilder<ReminderWorker>(24, TimeUnit.HOURS)
-                .setInitialDelay(item.delayMinutes.coerceAtLeast(15), TimeUnit.MINUTES)
+                .setInitialDelay(item.delayMinutes.coerceAtLeast(1), TimeUnit.MINUTES)
                 .setInputData(data).build()
             work.enqueueUniquePeriodicWork(item.id, ExistingPeriodicWorkPolicy.UPDATE, request)
         } else {
