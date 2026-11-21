@@ -40,6 +40,8 @@ import ai.zavi.assistant.core.DeviceActionPlanner
 import ai.zavi.assistant.data.ConversationStore
 import ai.zavi.assistant.data.DocumentTextExtractor
 import ai.zavi.assistant.data.ImportedDocument
+import ai.zavi.assistant.data.ImageAttachmentReader
+import ai.zavi.assistant.data.ImportedImage
 import ai.zavi.assistant.models.ChatMessage
 import ai.zavi.assistant.network.AiProvider
 import ai.zavi.assistant.network.ProviderConfig
@@ -88,6 +90,7 @@ class MainActivity : ComponentActivity() {
                 saveProviders = { saveProviderConfigs(it) },
                 testProvider = { multiProviderClient.test(it) },
                 readDocument = { uri -> DocumentTextExtractor.read(this, uri) },
+                readImage = { uri -> ImageAttachmentReader.read(this, uri) },
                 loadMemory = { conversationStore.loadMemory() },
                 saveMemory = { conversationStore.saveMemory(it) },
                 loadMessages = { conversationStore.loadMessages() },
@@ -264,6 +267,7 @@ private fun ZaviApp(
     saveProviders: (List<ProviderConfig>) -> Unit,
     testProvider: suspend (ProviderConfig) -> String,
     readDocument: (Uri) -> ImportedDocument,
+    readImage: (Uri) -> ImportedImage,
     loadMemory: () -> String,
     saveMemory: (String) -> Unit,
     loadMessages: () -> List<ChatMessage>,
@@ -278,6 +282,7 @@ private fun ZaviApp(
 ) {
     var prompt by remember { mutableStateOf("") }
     var attachedDocument by remember { mutableStateOf<ImportedDocument?>(null) }
+    var attachedImage by remember { mutableStateOf<ImportedImage?>(null) }
     var providers by remember { mutableStateOf(loadProviders()) }
     var providerTestStatus by remember { mutableStateOf("") }
     var memory by remember { mutableStateOf(loadMemory()) }
@@ -288,6 +293,19 @@ private fun ZaviApp(
     var pendingAction by remember { mutableStateOf<DeviceAction?>(null) }
     val lines = remember { mutableStateListOf<ChatMessage>().apply { addAll(loadMessages()) } }
     val scope = rememberCoroutineScope()
+    val imagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                attachedImage = readImage(uri)
+                voiceStatus = "Image attached and ready for AI vision"
+            } catch (error: Exception) {
+                voiceStatus = error.message ?: "Image could not be read."
+            }
+        }
+    }
+
     val documentPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -414,6 +432,12 @@ private fun ZaviApp(
                         .padding(horizontal = 8.dp, vertical = 6.dp)
                 ) {
                     IconButton(
+                        onClick = { imagePicker.launch(arrayOf("image/jpeg", "image/png", "image/webp")) },
+                        enabled = !busy
+                    ) {
+                        Icon(Icons.Default.Image, contentDescription = "Attach image", tint = Color(0xFF67E8F9))
+                    }
+                    IconButton(
                         onClick = { documentPicker.launch(arrayOf("application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain", "text/markdown", "text/csv", "application/json", "application/xml", "text/html")) },
                         enabled = !busy
                     ) {
@@ -445,7 +469,8 @@ private fun ZaviApp(
                         onClick = {
                             val query = prompt.trim()
                             val document = attachedDocument
-                            if ((query.isNotEmpty() || document != null) && !busy) {
+                            val image = attachedImage
+                            if ((query.isNotEmpty() || document != null || image != null) && !busy) {
                                 val action = DeviceActionPlanner.plan(query)
                                 val calculation = if (action == null) CalculatorEngine.tryCalculate(query) else null
                                 when {
@@ -465,16 +490,30 @@ private fun ZaviApp(
                                     }
                                     else -> {
                                         val previousHistory = lines.toList()
-                                        val visiblePrompt = (query.ifBlank { "Analyze this document" }) +
-                                            if (document != null) "\n📎 " + document.name else ""
-                                        val aiPrompt = if (document != null) {
-                                            query + "\n\nDOCUMENT CONTENT (" + document.name + "):\n" + document.text +
-                                                "\n\nUser request: " + query.ifBlank { "Summarize this document, explain key points, and answer in Telugu." }
-                                        } else query
+                                        val visiblePrompt = (query.ifBlank {
+                                            when {
+                                                image != null -> "Analyze this image"
+                                                document != null -> "Analyze this document"
+                                                else -> "Help me"
+                                            }
+                                        }) + (if (document != null) "\n📎 " + document.name else "") +
+                                            (if (image != null) "\n🖼️ " + image.name else "")
+                                        val imageBlock = image?.let { "\n\n" + it.toPromptBlock() }.orEmpty()
+                                        val documentBlock = if (document != null) {
+                                            "\n\nDOCUMENT CONTENT (" + document.name + "):\n" + document.text
+                                        } else ""
+                                        val defaultRequest = when {
+                                            image != null -> "Describe this image in detail. Read visible text if any and answer in Telugu."
+                                            document != null -> "Summarize this document, explain key points, and answer in Telugu."
+                                            else -> ""
+                                        }
+                                        val aiPrompt = query + documentBlock + imageBlock +
+                                            (if (defaultRequest.isNotBlank()) "\n\nUser request: " + query.ifBlank { defaultRequest } else "")
                                         lines.add(ChatMessage(role = "user", content = visiblePrompt))
                                         saveMessages(lines.toList())
                                         prompt = ""
                                         attachedDocument = null
+                                        attachedImage = null
                                         voiceStatus = ""
                                         busy = true
                                         scope.launch {
