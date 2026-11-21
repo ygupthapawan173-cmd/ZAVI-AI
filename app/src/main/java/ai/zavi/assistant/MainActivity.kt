@@ -347,39 +347,52 @@ private fun ZaviApp(
                             val query = prompt.trim()
                             if (query.isNotEmpty() && !busy) {
                                 val action = DeviceActionPlanner.plan(query)
-                                if (action != null) {
-                                    pendingAction = action
-                                    prompt = ""
-                                    voiceStatus = "Android action కోసం confirmation కావాలి."
-                                } else {
-                                    val previousHistory = lines.toList()
-                                    lines.add(ChatMessage(role = "user", content = query))
-                                    saveMessages(lines.toList())
-                                    prompt = ""
-                                    voiceStatus = ""
-                                    busy = true
-                                    scope.launch {
-                                        try {
-                                            val reply = ask(query, previousHistory, loadMemory(), getModel())
-                                            lines.add(
-                                                ChatMessage(
-                                                    role = "assistant",
-                                                    content = reply.text,
-                                                    agent = reply.agent
+                                val calculation = if (action == null) CalculatorEngine.tryCalculate(query) else null
+                                when {
+                                    action != null -> {
+                                        pendingAction = action
+                                        prompt = ""
+                                        voiceStatus = "Android action కోసం confirmation కావాలి."
+                                    }
+                                    calculation != null -> {
+                                        lines.add(ChatMessage(role = "user", content = query))
+                                        val result = "ఫలితం: $calculation"
+                                        lines.add(ChatMessage(role = "assistant", content = result, agent = "Calculator"))
+                                        saveMessages(lines.toList())
+                                        prompt = ""
+                                        voiceStatus = "Phoneలోనే calculate చేశాను — API call లేదు."
+                                        if (voiceReplies) speak(result)
+                                    }
+                                    else -> {
+                                        val previousHistory = lines.toList()
+                                        lines.add(ChatMessage(role = "user", content = query))
+                                        saveMessages(lines.toList())
+                                        prompt = ""
+                                        voiceStatus = ""
+                                        busy = true
+                                        scope.launch {
+                                            try {
+                                                val reply = ask(query, previousHistory, loadMemory(), getModel())
+                                                lines.add(
+                                                    ChatMessage(
+                                                        role = "assistant",
+                                                        content = reply.text,
+                                                        agent = reply.agent
+                                                    )
                                                 )
-                                            )
-                                            saveMessages(lines.toList())
-                                            if (voiceReplies) speak(reply.text)
-                                        } catch (error: Exception) {
-                                            lines.add(
-                                                ChatMessage(
-                                                    role = "assistant",
-                                                    content = error.message ?: "Request failed"
+                                                saveMessages(lines.toList())
+                                                if (voiceReplies) speak(reply.text)
+                                            } catch (error: Exception) {
+                                                lines.add(
+                                                    ChatMessage(
+                                                        role = "assistant",
+                                                        content = error.message ?: "Request failed"
+                                                    )
                                                 )
-                                            )
-                                            saveMessages(lines.toList())
-                                        } finally {
-                                            busy = false
+                                                saveMessages(lines.toList())
+                                            } finally {
+                                                busy = false
+                                            }
                                         }
                                     }
                                 }
