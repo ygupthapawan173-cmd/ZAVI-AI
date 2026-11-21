@@ -324,6 +324,7 @@ private fun ZaviApp(
     deleteReminder: (String) -> Unit
 ) {
     var prompt by remember { mutableStateOf("") }
+    var selectedTab by remember { mutableStateOf("HOME") }
     var attachedDocument by remember { mutableStateOf<ImportedDocument?>(null) }
     var attachedImage by remember { mutableStateOf<ImportedImage?>(null) }
     var providers by remember { mutableStateOf(loadProviders()) }
@@ -701,6 +702,40 @@ private fun ZaviApp(
                         enabled = !busy
                     ) {
                         Icon(Icons.Default.Send, contentDescription = "Send", tint = Color(0xFF67E8F9))
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .background(Color(0xFF171A2D), RoundedCornerShape(22.dp))
+                        .padding(horizontal = 5.dp, vertical = 7.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    listOf("HOME", "CHAT", "TOOLS", "SETTINGS").forEach { tab ->
+                        val active = selectedTab == tab
+                        TextButton(
+                            onClick = {
+                                selectedTab = tab
+                                if (tab == "SETTINGS") {
+                                    providers = loadProviders()
+                                    providerTestStatus = ""
+                                    memory = loadMemory()
+                                    showSettings = true
+                                }
+                                if (tab == "CHAT") voiceStatus = "Chat ready — message ZAVI AI below."
+                                if (tab == "TOOLS") voiceStatus = "Choose a tool from Quick Actions."
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                when (tab) { "HOME" -> "⌂ Home"; "CHAT" -> "▣ Chat"; "TOOLS" -> "✦ Tools"; else -> "⚙ Settings" },
+                                color = if (active) Color(0xFF67E8F9) else Color(0xFF9CA3AF),
+                                fontSize = 10.sp,
+                                fontWeight = if (active) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
