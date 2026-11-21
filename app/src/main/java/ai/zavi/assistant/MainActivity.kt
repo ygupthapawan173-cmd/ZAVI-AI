@@ -459,13 +459,23 @@ private fun ZaviApp(
                 }
 
                 val normalized = heard.lowercase().replace(Regex("[^\\p{L}\\p{N} ]"), " ").trim()
-                val wakePhrases = listOf("hey zavi", "hey savvy", "hey zावी", "హే జావి", "హే జావీ")
+                // Telugu speech engines may transcribe the wake phrase in several ways.
+                // Match the assistant name independently of "Hey" so recognition remains usable.
+                val wakePhrases = listOf(
+                    "hey zavi", "hey savvy", "hey zावी", "హే జావి", "హే జావీ",
+                    "ఏ జావి", "జావి", "జావీ", "zavi", "savvy"
+                )
                 if (!waitingForCommand) {
                     val wakePhrase = wakePhrases.firstOrNull { normalized.contains(it) }
                     if (wakePhrase != null) {
                         val commandInline = normalized.substringAfter(wakePhrase).trim()
                         if (commandInline.isNotBlank()) {
-                            prompt = heard.substringAfter(wakePhrase, "").trim().ifBlank { heard.trim() }
+                            val originalLower = heard.lowercase(Locale.ROOT)
+                            val originalWake = wakePhrases.firstOrNull { originalLower.contains(it) }
+                            prompt = if (originalWake != null) {
+                                heard.substring(originalLower.indexOf(originalWake) + originalWake.length).trim()
+                            } else ""
+                            if (prompt.isBlank()) prompt = heard.trim()
                             waitingForCommand = false
                         } else {
                             waitingForCommand = true
@@ -475,7 +485,8 @@ private fun ZaviApp(
                             continue
                         }
                     } else {
-                        delay(250)
+                        voiceStatus = "విన్నది: $heard — 'Hey ZAVI' అని చెప్పండి."
+                        delay(350)
                         continue
                     }
                 }
