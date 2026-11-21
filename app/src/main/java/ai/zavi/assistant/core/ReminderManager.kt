@@ -99,13 +99,11 @@ object ReminderManager {
         if (enabled) enqueue(context, item)
         else {
             work.cancelUniqueWork(id)
-            work.cancelUniquePeriodicWork(id)
         }
     }
 
     fun delete(context: Context, id: String) {
         WorkManager.getInstance(context).cancelUniqueWork(id)
-        WorkManager.getInstance(context).cancelUniquePeriodicWork(id)
         save(context, list(context).filterNot { it.id == id })
     }
 }
