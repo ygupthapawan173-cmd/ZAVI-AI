@@ -25,13 +25,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import ai.zavi.assistant.core.AgentWorkflow
+import ai.zavi.assistant.core.DeviceAction
+import ai.zavi.assistant.core.DeviceActionLauncher
+import ai.zavi.assistant.core.DeviceActionPlanner
 import ai.zavi.assistant.data.ConversationStore
 import ai.zavi.assistant.models.ChatMessage
 import ai.zavi.assistant.network.OpenRouterClient
@@ -67,7 +69,7 @@ class MainActivity : ComponentActivity() {
         textToSpeech = TextToSpeech(this) { status ->
             textToSpeechReady = status == TextToSpeech.SUCCESS
             if (textToSpeechReady) {
-                textToSpeech?.language = Locale.getDefault()
+                textToSpeech?.language = Locale.forLanguageTag("te-IN")
             }
         }
 
@@ -84,10 +86,12 @@ class MainActivity : ComponentActivity() {
                 clearMessages = { conversationStore.clearMessages() },
                 ask = { prompt, history, memory, model ->
                     val token = securePrefs.getString(KEY_OPENROUTER, "") ?: ""
-                    val (state, messages) = AgentWorkflow.prepare(prompt, history, memory)
+                    val (_, messages) = AgentWorkflow.prepare(prompt, history, memory)
                     val answer = openRouterClient.complete(token, model, messages)
-                    AgentReply(answer, state.selectedAgent.title)
+                    val activeAgent = AgentRouterForUi.routeName(prompt)
+                    AgentReply(answer, activeAgent)
                 },
+                launchDeviceAction = { action -> DeviceActionLauncher.launch(this, action) },
                 startVoice = { onResult, onError -> startVoiceRecognition(onResult, onError) },
                 speak = { speakText(it) }
             )
@@ -181,6 +185,11 @@ private data class AgentReply(
     val agent: String
 )
 
+/* Kept in the app layer so the workflow's internal routing and UI label stay in sync. */
+private object AgentRouterForUi {
+    fun routeName(query: String): String = ai.zavi.assistant.core.AgentRouter.route(query).title
+}
+
 @Composable
 private fun ZaviApp(
     getKey: () -> String,
@@ -193,6 +202,7 @@ private fun ZaviApp(
     saveMessages: (List<ChatMessage>) -> Unit,
     clearMessages: () -> Unit,
     ask: suspend (String, List<ChatMessage>, String, String) -> AgentReply,
+    launchDeviceAction: (DeviceAction) -> String,
     startVoice: ((String) -> Unit, (String) -> Unit) -> Unit,
     speak: (String) -> Unit
 ) {
@@ -204,6 +214,7 @@ private fun ZaviApp(
     var busy by remember { mutableStateOf(false) }
     var voiceReplies by remember { mutableStateOf(false) }
     var voiceStatus by remember { mutableStateOf("") }
+    var pendingAction by remember { mutableStateOf<DeviceAction?>(null) }
     val lines = remember { mutableStateListOf<ChatMessage>().apply { addAll(loadMessages()) } }
     val scope = rememberCoroutineScope()
     val micPermission = rememberLauncherForActivityResult(
@@ -214,11 +225,9 @@ private fun ZaviApp(
             startVoice(
                 { recognized ->
                     prompt = recognized
-                    voiceStatus = "Voice input ready"
+                    voiceStatus = "Voice input ready — Send నొక్కి కొనసాగించండి."
                 },
-                { error ->
-                    voiceStatus = error
-                }
+                { error -> voiceStatus = error }
             )
         } else {
             voiceStatus = "Voice input కోసం microphone permission అవసరం."
@@ -343,34 +352,41 @@ private fun ZaviApp(
                         onClick = {
                             val query = prompt.trim()
                             if (query.isNotEmpty() && !busy) {
-                                val previousHistory = lines.toList()
-                                lines.add(ChatMessage(role = "user", content = query))
-                                saveMessages(lines.toList())
-                                prompt = ""
-                                voiceStatus = ""
-                                busy = true
-                                scope.launch {
-                                    try {
-                                        val reply = ask(query, previousHistory, loadMemory(), getModel())
-                                        lines.add(
-                                            ChatMessage(
-                                                role = "assistant",
-                                                content = reply.text,
-                                                agent = reply.agent
+                                val action = DeviceActionPlanner.plan(query)
+                                if (action != null) {
+                                    pendingAction = action
+                                    prompt = ""
+                                    voiceStatus = "Android action కోసం confirmation కావాలి."
+                                } else {
+                                    val previousHistory = lines.toList()
+                                    lines.add(ChatMessage(role = "user", content = query))
+                                    saveMessages(lines.toList())
+                                    prompt = ""
+                                    voiceStatus = ""
+                                    busy = true
+                                    scope.launch {
+                                        try {
+                                            val reply = ask(query, previousHistory, loadMemory(), getModel())
+                                            lines.add(
+                                                ChatMessage(
+                                                    role = "assistant",
+                                                    content = reply.text,
+                                                    agent = reply.agent
+                                                )
                                             )
-                                        )
-                                        saveMessages(lines.toList())
-                                        if (voiceReplies) speak(reply.text)
-                                    } catch (error: Exception) {
-                                        lines.add(
-                                            ChatMessage(
-                                                role = "assistant",
-                                                content = error.message ?: "Request failed"
+                                            saveMessages(lines.toList())
+                                            if (voiceReplies) speak(reply.text)
+                                        } catch (error: Exception) {
+                                            lines.add(
+                                                ChatMessage(
+                                                    role = "assistant",
+                                                    content = error.message ?: "Request failed"
+                                                )
                                             )
-                                        )
-                                        saveMessages(lines.toList())
-                                    } finally {
-                                        busy = false
+                                            saveMessages(lines.toList())
+                                        } finally {
+                                            busy = false
+                                        }
                                     }
                                 }
                             }
@@ -380,6 +396,26 @@ private fun ZaviApp(
                         Icon(Icons.Default.Send, contentDescription = "Send", tint = Color(0xFF67E8F9))
                     }
                 }
+            }
+
+            pendingAction?.let { action ->
+                AlertDialog(
+                    onDismissRequest = { pendingAction = null },
+                    title = { Text(action.title) },
+                    text = { Text(action.description) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            voiceStatus = launchDeviceAction(action)
+                            pendingAction = null
+                        }) { Text("Continue") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            pendingAction = null
+                            voiceStatus = "Action cancelled."
+                        }) { Text("Cancel") }
+                    }
+                )
             }
 
             if (showSettings) {
