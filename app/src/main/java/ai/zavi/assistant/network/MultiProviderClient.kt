@@ -36,6 +36,8 @@ class MultiProviderClient(
         withContext(Dispatchers.IO) {
             val active = configs.filter { it.enabled && it.apiKey.isNotBlank() }
             require(active.isNotEmpty()) { "Settingsలో కనీసం ఒక AI provider API key add చేసి Enable చేయండి." }
+            val taskType = AutoModelRouter.detectTask(messages)
+            val routedProviders = AutoModelRouter.order(active, taskType)
 
             // Research is opt-in by intent: ordinary chat stays fast and does not make a web request.
             val query = messages.lastOrNull { it.role == "user" }?.content.orEmpty()
@@ -57,9 +59,9 @@ class MultiProviderClient(
             val containsImage = query.contains("[[ZAVI_IMAGE:")
             val orchestrationRequested = shouldOrchestrate(query) && !containsImage
             val answer = if (orchestrationRequested) {
-                runOrchestrated(active, groundedMessages)
+                runOrchestrated(routedProviders, groundedMessages)
             } else {
-                requestWithFallback(active, groundedMessages)
+                requestWithFallback(routedProviders, groundedMessages)
             }
             ResearchCitationFormatter.append(answer, sources)
         }
