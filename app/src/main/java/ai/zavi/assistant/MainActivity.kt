@@ -37,7 +37,6 @@ import ai.zavi.assistant.core.DeviceActionLauncher
 import ai.zavi.assistant.core.DeviceActionPlanner
 import ai.zavi.assistant.data.ConversationStore
 import ai.zavi.assistant.models.ChatMessage
-import ai.zavi.assistant.network.OpenRouterClient
 import ai.zavi.assistant.network.AiProvider
 import ai.zavi.assistant.network.ProviderConfig
 import ai.zavi.assistant.network.MultiProviderClient
@@ -446,7 +445,7 @@ private fun ZaviApp(
                                         busy = true
                                         scope.launch {
                                             try {
-                                                val reply = ask(query, previousHistory, loadMemory(), getModel())
+                                                val reply = ask(query, previousHistory, loadMemory(), "")
                                                 lines.add(
                                                     ChatMessage(
                                                         role = "assistant",
