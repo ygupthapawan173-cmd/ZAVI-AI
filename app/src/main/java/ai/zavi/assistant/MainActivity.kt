@@ -12,6 +12,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -108,6 +110,11 @@ class MainActivity : ComponentActivity() {
                 launchDeviceAction = { action -> DeviceActionLauncher.launch(this, action) },
                 startVoice = { onResult, onError -> startVoiceRecognition(onResult, onError) },
                 speak = { speakText(it) },
+                requestNotificationPermission = {
+                    if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 7301)
+                    }
+                },
                 loadReminders = { ReminderManager.list(this) },
                 addReminder = { title, delay, daily -> ReminderManager.add(this, title, delay, daily) },
                 setReminderEnabled = { id, enabled -> ReminderManager.setEnabled(this, id, enabled) },
@@ -286,6 +293,7 @@ private fun ZaviApp(
     startVoice: ((String) -> Unit, (String) -> Unit) -> Unit,
     speak: (String) -> Unit,
     shareChat: (List<ChatMessage>) -> Unit,
+    requestNotificationPermission: () -> Unit,
     loadReminders: () -> List<ZaviReminder>,
     addReminder: (String, Long, Boolean) -> Unit,
     setReminderEnabled: (String, Boolean) -> Unit,
@@ -384,6 +392,13 @@ private fun ZaviApp(
                         }
                         TextButton(onClick = { shareChat(lines.toList()) }) {
                             Text("Share", color = Color(0xFF67E8F9))
+                        }
+                        TextButton(onClick = {
+                            reminders = loadReminders()
+                            requestNotificationPermission()
+                            showAutomation = true
+                        }) {
+                            Text("Automation", color = Color(0xFFC084FC))
                         }
                         TextButton(onClick = {
                             providers = loadProviders()
