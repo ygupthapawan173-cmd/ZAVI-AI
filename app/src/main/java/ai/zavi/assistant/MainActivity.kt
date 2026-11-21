@@ -98,61 +98,90 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @Suppress("DEPRECATION")
     private fun startVoiceRecognition(
         onResult: (String) -> Unit,
         onError: (String) -> Unit
     ) {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            onError("ఈ ఫోన్‌లో speech recognition అందుబాటులో లేదు.")
+            onError("ఈ ఫోన్‌లో speech recognition అందుబాటులో లేదు. Google appలో Voice input enable చేయండి.")
             return
         }
 
-        speechResult = onResult
-        speechError = onError
-
+        // Recreate the recognizer for each tap. Reusing a recognizer after ERROR_CLIENT
+        // can leave Android's speech service in a stale state and repeat error code 5.
         try {
-            val recognizer = speechRecognizer
-                ?: SpeechRecognizer.createSpeechRecognizer(this).also { created ->
-                    created.setRecognitionListener(object : RecognitionListener {
-                        override fun onReadyForSpeech(params: Bundle?) = Unit
-                        override fun onBeginningOfSpeech() = Unit
-                        override fun onRmsChanged(rmsdB: Float) = Unit
-                        override fun onBufferReceived(buffer: ByteArray?) = Unit
-                        override fun onEndOfSpeech() = Unit
-                        override fun onEvent(eventType: Int, params: Bundle?) = Unit
-                        override fun onPartialResults(partialResults: Bundle?) = Unit
+            speechRecognizer?.cancel()
+            speechRecognizer?.destroy()
+            speechRecognizer = null
+            speechResult = onResult
+            speechError = onError
 
-                        override fun onError(error: Int) {
-                            speechError?.invoke("Voice recognition failed (code $error). మళ్లీ ప్రయత్నించండి.")
-                            speechResult = null
-                            speechError = null
-                        }
-
-                        override fun onResults(results: Bundle?) {
-                            val spoken = results
-                                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                                ?.firstOrNull()
-                                .orEmpty()
-                            if (spoken.isNotBlank()) {
-                                speechResult?.invoke(spoken)
-                            } else {
-                                speechError?.invoke("Voice clearగా వినిపించలేదు. మళ్లీ చెప్పండి.")
-                            }
-                            speechResult = null
-                            speechError = null
-                        }
-                    })
-                }
+            val recognizer = SpeechRecognizer.createSpeechRecognizer(this)
             speechRecognizer = recognizer
+            recognizer.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) = Unit
+                override fun onBeginningOfSpeech() = Unit
+                override fun onRmsChanged(rmsdB: Float) = Unit
+                override fun onBufferReceived(buffer: ByteArray?) = Unit
+                override fun onEndOfSpeech() = Unit
+                override fun onEvent(eventType: Int, params: Bundle?) = Unit
+                override fun onPartialResults(partialResults: Bundle?) = Unit
+
+                override fun onError(error: Int) {
+                    val message = when (error) {
+                        SpeechRecognizer.ERROR_CLIENT ->
+                            "Voice service reset అయింది. Mic మళ్లీ నొక్కండి; అవసరమైతే Google app update చేయండి."
+                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
+                            "Microphone permission ఇవ్వండి."
+                        SpeechRecognizer.ERROR_NETWORK,
+                        SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
+                            "Voice recognition కోసం internet connection చూడండి."
+                        SpeechRecognizer.ERROR_NO_MATCH,
+                        SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
+                            "మాటలు స్పష్టంగా వినిపించలేదు. మళ్లీ ప్రయత్నించండి."
+                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY ->
+                            "Voice service busyగా ఉంది. కొద్దిసేపటి తర్వాత ప్రయత్నించండి."
+                        else -> "Voice recognition failed (code $error). మళ్లీ ప్రయత్నించండి."
+                    }
+                    speechError?.invoke(message)
+                    speechResult = null
+                    speechError = null
+                    speechRecognizer?.destroy()
+                    speechRecognizer = null
+                }
+
+                override fun onResults(results: Bundle?) {
+                    val spoken = results
+                        ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        ?.firstOrNull()
+                        .orEmpty()
+                    if (spoken.isNotBlank()) {
+                        speechResult?.invoke(spoken)
+                    } else {
+                        speechError?.invoke("Voice clearగా వినిపించలేదు. మళ్లీ చెప్పండి.")
+                    }
+                    speechResult = null
+                    speechError = null
+                    speechRecognizer?.destroy()
+                    speechRecognizer = null
+                }
+            })
 
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "te-IN")
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "te-IN")
+                putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             }
             recognizer.startListening(intent)
         } catch (error: Exception) {
+            speechResult = null
+            speechError = null
+            speechRecognizer?.destroy()
+            speechRecognizer = null
             onError(error.message ?: "Voice input ప్రారంభం కాలేదు.")
         }
     }
