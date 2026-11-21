@@ -226,8 +226,10 @@ class MainActivity : ComponentActivity() {
 
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "te-IN")
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "te-IN")
+                // Prefer India English so English and mixed Telugu-English phrases are not
+                // forcibly decoded as Telugu. Telugu recognition remains available via device language settings.
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-IN")
                 putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
@@ -419,54 +421,80 @@ private fun ZaviApp(
 
     LaunchedEffect(handsFreeMode) {
         if (handsFreeMode) {
-            var wakeDetected = false
+            var waitingForCommand = false
             while (isActive && handsFreeMode) {
-                voiceStatus = if (wakeDetected) "చెప్పండి… command వింటున్నాను" else "Hey ZAVI కోసం వింటున్నాను…"
+                voiceStatus = if (waitingForCommand) "చెప్పండి… మీ command వింటున్నాను" else "Hey ZAVI కోసం వింటున్నాను…"
                 val heard = suspendCancellableCoroutine<String?> { continuation ->
                     startVoice(
                         { result -> if (continuation.isActive) continuation.resume(result) },
-                        { _ -> if (continuation.isActive) continuation.resume(null) }
+                        { error ->
+                            if (continuation.isActive) continuation.resume(null)
+                            voiceStatus = error
+                        }
                     )
                     continuation.invokeOnCancellation { stopVoice() }
                 }
                 if (!isActive || !handsFreeMode) break
                 if (heard.isNullOrBlank()) {
-                    delay(350)
+                    delay(700)
                     continue
                 }
+
                 val normalized = heard.lowercase().replace(Regex("[^\\p{L}\\p{N} ]"), " ").trim()
-                if (!wakeDetected) {
-                    val wakeWords = listOf("hey zavi", "hey zavi", "hey savvy", "హే జావి", "హే జావీ", "హే జావి")
-                    if (wakeWords.any { normalized.contains(it) }) {
-                        wakeDetected = true
-                        speak("చెప్పండి")
-                    }
-                } else {
-                    if (normalized.contains("stop listening") || normalized.contains("స్టాప్ లిజనింగ్") || normalized.contains("ఆపు")) {
-                        handsFreeMode = false
-                        voiceStatus = "Wake Word mode ఆపివేశాను."
-                    } else {
-                        val command = heard.trim()
-                        lines.add(ChatMessage(role = "user", content = command))
-                        saveMessages(lines.toList())
-                        busy = true
-                        try {
-                            val reply = ask(command, lines.dropLast(1), loadMemory(), "")
-                            lines.add(ChatMessage(role = "assistant", content = reply.text, agent = reply.agent))
-                            saveMessages(lines.toList())
-                            if (reply.text.isNotBlank()) speak(reply.text)
-                        } catch (error: Exception) {
-                            val message = error.message ?: "Voice request failed"
-                            lines.add(ChatMessage(role = "assistant", content = message))
-                            saveMessages(lines.toList())
-                            speak(message)
-                        } finally {
-                            busy = false
+                val wakePhrases = listOf("hey zavi", "hey savvy", "hey zावी", "హే జావి", "హే జావీ")
+                if (!waitingForCommand) {
+                    val wakePhrase = wakePhrases.firstOrNull { normalized.contains(it) }
+                    if (wakePhrase != null) {
+                        val commandInline = normalized.substringAfter(wakePhrase).trim()
+                        if (commandInline.isNotBlank()) {
+                            prompt = heard.substringAfter(wakePhrase, "").trim().ifBlank { heard.trim() }
+                            waitingForCommand = false
+                        } else {
+                            waitingForCommand = true
+                            voiceStatus = "చెప్పండి… ఇప్పుడు command చెప్పండి"
+                            speak("చెప్పండి")
+                            delay(1200)
+                            continue
                         }
+                    } else {
+                        delay(250)
+                        continue
                     }
-                    wakeDetected = false
                 }
-                delay(300)
+
+                val command = if (waitingForCommand) heard.trim() else prompt.trim()
+                waitingForCommand = false
+                prompt = ""
+                if (command.isBlank()) {
+                    delay(300)
+                    continue
+                }
+                if (command.lowercase().contains("stop listening") || command.contains("ఆపు")) {
+                    handsFreeMode = false
+                    voiceStatus = "Hey ZAVI listening ఆపివేశాను."
+                    break
+                }
+
+                lines.add(ChatMessage(role = "user", content = command))
+                saveMessages(lines.toList())
+                busy = true
+                voiceStatus = "మీ command అందింది… ZAVI ఆలోచిస్తోంది"
+                try {
+                    val reply = ask(command, lines.dropLast(1), loadMemory(), "")
+                    lines.add(ChatMessage(role = "assistant", content = reply.text, agent = reply.agent))
+                    saveMessages(lines.toList())
+                    voiceStatus = if (reply.text.isBlank()) "AI నుంచి ఖాళీ response వచ్చింది. Settingsలో API provider పరీక్షించండి." else "ZAVI సమాధానం ఇచ్చింది."
+                    if (reply.text.isNotBlank()) speak(reply.text)
+                } catch (error: Exception) {
+                    val message = error.message ?: "AI request failed"
+                    lines.add(ChatMessage(role = "assistant", content = message))
+                    saveMessages(lines.toList())
+                    voiceStatus = "AI error: $message"
+                    speak("క్షమించండి. AI connection సమస్య ఉంది.")
+                } finally {
+                    busy = false
+                }
+                delay(900)
             }
             stopVoice()
         }
