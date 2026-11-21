@@ -36,6 +36,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -361,6 +362,7 @@ private fun ZaviApp(
     var pendingAction by remember { mutableStateOf<DeviceAction?>(null) }
     val lines = remember { mutableStateListOf<ChatMessage>().apply { addAll(loadMessages()) } }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
