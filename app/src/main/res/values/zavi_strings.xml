@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="zavi_accessibility_description">Allows ZAVI AI to read visible screen content and perform actions only when you explicitly request them.</string>
+</resources>
