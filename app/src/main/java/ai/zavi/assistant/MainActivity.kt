@@ -38,6 +38,11 @@ import ai.zavi.assistant.core.DeviceActionPlanner
 import ai.zavi.assistant.data.ConversationStore
 import ai.zavi.assistant.models.ChatMessage
 import ai.zavi.assistant.network.OpenRouterClient
+import ai.zavi.assistant.network.AiProvider
+import ai.zavi.assistant.network.ProviderConfig
+import ai.zavi.assistant.network.MultiProviderClient
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -57,7 +62,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val conversationStore by lazy { ConversationStore(securePrefs) }
-    private val openRouterClient by lazy { OpenRouterClient() }
+    private val multiProviderClient by lazy { MultiProviderClient() }
     private var speechRecognizer: SpeechRecognizer? = null
     private var speechResult: ((String) -> Unit)? = null
     private var speechError: ((String) -> Unit)? = null
@@ -76,20 +81,18 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ZaviApp(
-                getKey = { securePrefs.getString(KEY_OPENROUTER, "") ?: "" },
-                saveKey = { securePrefs.edit().putString(KEY_OPENROUTER, it.trim()).apply() },
-                getModel = { securePrefs.getString(KEY_MODEL, DEFAULT_MODEL) ?: DEFAULT_MODEL },
-                saveModel = { securePrefs.edit().putString(KEY_MODEL, it.trim()).apply() },
+                loadProviders = { loadProviderConfigs() },
+                saveProviders = { saveProviderConfigs(it) },
+                testProvider = { multiProviderClient.test(it) },
                 loadMemory = { conversationStore.loadMemory() },
                 saveMemory = { conversationStore.saveMemory(it) },
                 loadMessages = { conversationStore.loadMessages() },
                 saveMessages = { conversationStore.saveMessages(it) },
                 clearMessages = { conversationStore.clearMessages() },
                 clearMemory = { conversationStore.clearMemory() },
-                ask = { prompt, history, memory, model ->
-                    val token = securePrefs.getString(KEY_OPENROUTER, "") ?: ""
+                ask = { prompt, history, memory, _ ->
                     val (state, messages) = AgentWorkflow.prepare(prompt, history, memory)
-                    val answer = openRouterClient.complete(token, model, messages)
+                    val answer = multiProviderClient.complete(loadProviderConfigs(), messages)
                     AgentReply(answer, state.selectedAgent.title)
                 },
                 launchDeviceAction = { action -> DeviceActionLauncher.launch(this, action) },
@@ -199,6 +202,30 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun loadProviderConfigs(): List<ProviderConfig> = AiProvider.values().map { provider ->
+        val id = provider.name.lowercase()
+        val legacyKey = if (provider == AiProvider.OPENROUTER) securePrefs.getString(KEY_OPENROUTER, "") else ""
+        val legacyModel = if (provider == AiProvider.OPENROUTER) securePrefs.getString(KEY_MODEL, provider.defaultModel) else provider.defaultModel
+        ProviderConfig(provider, securePrefs.getString("provider_${id}_key", legacyKey) ?: legacyKey.orEmpty(),
+            securePrefs.getString("provider_${id}_model", legacyModel) ?: provider.defaultModel,
+            securePrefs.getBoolean("provider_${id}_enabled", provider == AiProvider.OPENROUTER && !legacyKey.isNullOrBlank()))
+    }
+
+    private fun saveProviderConfigs(configs: List<ProviderConfig>) {
+        val editor = securePrefs.edit()
+        configs.forEach { config ->
+            val id = config.provider.name.lowercase()
+            editor.putString("provider_${id}_key", config.apiKey.trim())
+            editor.putString("provider_${id}_model", config.model.trim().ifBlank { config.provider.defaultModel })
+            editor.putBoolean("provider_${id}_enabled", config.enabled)
+            if (config.provider == AiProvider.OPENROUTER) {
+                editor.putString(KEY_OPENROUTER, config.apiKey.trim())
+                editor.putString(KEY_MODEL, config.model.trim().ifBlank { DEFAULT_MODEL })
+            }
+        }
+        editor.apply()
+    }
+
     private fun speakText(text: String) {
         if (textToSpeechReady && text.isNotBlank()) {
             textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "zavi-answer")
@@ -229,10 +256,9 @@ private data class AgentReply(
 
 @Composable
 private fun ZaviApp(
-    getKey: () -> String,
-    saveKey: (String) -> Unit,
-    getModel: () -> String,
-    saveModel: (String) -> Unit,
+    loadProviders: () -> List<ProviderConfig>,
+    saveProviders: (List<ProviderConfig>) -> Unit,
+    testProvider: suspend (ProviderConfig) -> String,
     loadMemory: () -> String,
     saveMemory: (String) -> Unit,
     loadMessages: () -> List<ChatMessage>,
@@ -246,8 +272,8 @@ private fun ZaviApp(
     shareChat: (List<ChatMessage>) -> Unit
 ) {
     var prompt by remember { mutableStateOf("") }
-    var key by remember { mutableStateOf(getKey()) }
-    var model by remember { mutableStateOf(getModel()) }
+    var providers by remember { mutableStateOf(loadProviders()) }
+    var providerTestStatus by remember { mutableStateOf("") }
     var memory by remember { mutableStateOf(loadMemory()) }
     var showSettings by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
@@ -307,8 +333,8 @@ private fun ZaviApp(
                             Text("Share", color = Color(0xFF67E8F9))
                         }
                         TextButton(onClick = {
-                            key = getKey()
-                            model = getModel()
+                            providers = loadProviders()
+                            providerTestStatus = ""
                             memory = loadMemory()
                             showSettings = true
                         }) {
@@ -478,21 +504,30 @@ private fun ZaviApp(
                     onDismissRequest = { showSettings = false },
                     title = { Text("ZAVI AI Settings") },
                     text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("API key and memory are encrypted on this device.", fontSize = 12.sp, color = Color.Gray)
-                            OutlinedTextField(
-                                value = key,
-                                onValueChange = { key = it },
-                                label = { Text("OpenRouter API Key") },
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = model,
-                                onValueChange = { model = it },
-                                label = { Text("Model") },
-                                singleLine = true
-                            )
-                            Text("Free-first default: openrouter/free", fontSize = 11.sp, color = Color(0xFF67E8F9))
+                        Column(modifier = Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Four AI providers • keys encrypted on this device. Enable providers for automatic fallback.", fontSize = 12.sp, color = Color.Gray)
+                            providers.forEachIndexed { index, config ->
+                                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF20243A))) {
+                                    Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                            Text(config.provider.title, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text("Enable", color = Color.LightGray, fontSize = 11.sp)
+                                                Switch(checked = config.enabled, onCheckedChange = { enabled -> providers = providers.toMutableList().also { it[index] = config.copy(enabled = enabled) } })
+                                            }
+                                        }
+                                        OutlinedTextField(value = config.apiKey, onValueChange = { value -> providers = providers.toMutableList().also { it[index] = config.copy(apiKey = value) } }, label = { Text("API Key") }, singleLine = true)
+                                        OutlinedTextField(value = config.model, onValueChange = { value -> providers = providers.toMutableList().also { it[index] = config.copy(model = value) } }, label = { Text("Model ID") }, singleLine = true)
+                                        TextButton(onClick = { scope.launch {
+                                            providerTestStatus = "Testing ${config.provider.title}…"
+                                            providerTestStatus = try { testProvider(config.copy(apiKey = config.apiKey.trim())); "${config.provider.title}: Connection successful" }
+                                            catch (e: Exception) { "${config.provider.title}: ${e.message ?: "Connection failed"}" }
+                                        } }, enabled = config.apiKey.isNotBlank()) { Text("Test connection") }
+                                    }
+                                }
+                            }
+                            if (providerTestStatus.isNotBlank()) Text(providerTestStatus, color = Color(0xFF67E8F9), fontSize = 12.sp)
+                            Text("Default model IDs are editable. Free-tier quotas and availability depend on each provider.", fontSize = 11.sp, color = Color(0xFF67E8F9))
                             OutlinedTextField(
                                 value = memory,
                                 onValueChange = { memory = it },
@@ -504,8 +539,7 @@ private fun ZaviApp(
                     },
                     confirmButton = {
                         TextButton(onClick = {
-                            saveKey(key)
-                            saveModel(model.ifBlank { "openrouter/free" })
+                            saveProviders(providers)
                             saveMemory(memory)
                             showSettings = false
                         }) { Text("Save") }
