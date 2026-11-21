@@ -427,33 +427,65 @@ private fun ZaviApp(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("ZAVI", fontSize = 30.sp, color = Color.White, fontWeight = FontWeight.ExtraBold)
-                        Text("ALL-IN-ONE AI", fontSize = 10.sp, color = Color(0xFF67E8F9), fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                        Text("Telugu • English • Cloud intelligence", fontSize = 11.sp, color = Color(0xFF9CA3AF))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(
+                            modifier = Modifier.size(52.dp)
+                                .background(
+                                    Brush.linearGradient(listOf(Color(0xFF06B6D4), Color(0xFF8B5CF6), Color(0xFFEC4899), Color(0xFFF97316))),
+                                    RoundedCornerShape(18.dp)
+                                ).padding(2.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(Modifier.fillMaxSize().background(Color(0xFF080B18), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                                Text("Z", fontSize = 31.sp, fontWeight = FontWeight.Black, color = Color.White)
+                            }
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("ZAVI AI", fontSize = 25.sp, color = Color.White, fontWeight = FontWeight.ExtraBold)
+                            Text("YOUR ALL-IN-ONE AI", fontSize = 9.sp, color = Color(0xFF67E8F9), fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
+                            Text("Telugu • English • Cloud intelligence", fontSize = 10.sp, color = Color(0xFF9CA3AF))
+                        }
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         TextButton(onClick = { voiceReplies = !voiceReplies }) {
-                            Text(if (voiceReplies) "🔊 Voice ON" else "🔇 Voice OFF", color = Color(0xFF67E8F9))
+                            Text(if (voiceReplies) "🔊 Voice ON" else "🔇 Voice OFF", color = Color(0xFF67E8F9), fontSize = 11.sp)
                         }
                         TextButton(onClick = { shareChat(lines.toList()) }) {
-                            Text("Share chat", color = Color(0xFF67E8F9))
+                            Text("Share", color = Color(0xFFC084FC), fontSize = 11.sp)
                         }
                     }
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(12.dp))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF171D35))
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                 ) {
-                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text("Your AI workspace", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text(
-                            "${providers.count { it.enabled && it.apiKey.isNotBlank() }} AI providers ready  •  ${reminders.size} reminders  •  ${if (voiceReplies) "Voice enabled" else "Text mode"}",
-                            color = Color(0xFF9CA3AF), fontSize = 11.sp
-                        )
+                    Box(
+                        Modifier.fillMaxWidth().background(
+                            Brush.linearGradient(listOf(Color(0xFF172554), Color(0xFF31205C), Color(0xFF24113D)))
+                        ).padding(16.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                Text("SMART BRAIN 2.0", color = Color(0xFF67E8F9), fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.8.sp)
+                                Text("● ACTIVE", color = Color(0xFF86EFAC), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Text("Your AI workspace", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                            Text("Auto Model • Multi-provider fallback • Telugu + English", color = Color(0xFFD1D5DB), fontSize = 11.sp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                listOf(
+                                    "${providers.count { it.enabled && it.apiKey.isNotBlank() }} Providers",
+                                    "${reminders.size} Reminders",
+                                    if (voiceReplies) "Voice ON" else "Text mode"
+                                ).forEach { item ->
+                                    Box(Modifier.weight(1f).background(Color(0x3322D3EE), RoundedCornerShape(12.dp)).padding(vertical = 9.dp, horizontal = 5.dp), contentAlignment = Alignment.Center) {
+                                        Text(item, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
