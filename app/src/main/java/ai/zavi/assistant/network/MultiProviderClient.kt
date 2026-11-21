@@ -29,22 +29,49 @@ class MultiProviderClient(
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
         .callTimeout(55, TimeUnit.SECONDS)
-        .build()
+        .build(),
+    private val webResearchClient: WebResearchClient = WebResearchClient()
 ) {
     suspend fun complete(configs: List<ProviderConfig>, messages: List<OpenRouterMessage>): String =
         withContext(Dispatchers.IO) {
             val active = configs.filter { it.enabled && it.apiKey.isNotBlank() }
             require(active.isNotEmpty()) { "Settingsలో కనీసం ఒక AI provider API key add చేసి Enable చేయండి." }
+
+            // Research is opt-in by intent: ordinary chat stays fast and does not make a web request.
+            val query = messages.lastOrNull { it.role == "user" }?.content.orEmpty()
+            val researchMode = shouldUseLiveSearch(query) ||
+                messages.firstOrNull { it.role == "system" }?.content?.contains("Research Assistant") == true
+            val groundedMessages = if (researchMode && query.isNotBlank()) {
+                val sources = runCatching { webResearchClient.search(query, 5) }.getOrElse { emptyList() }
+                val context = webResearchClient.asGroundedContext(query, sources)
+                val system = messages.firstOrNull { it.role == "system" }
+                if (system == null) {
+                    listOf(OpenRouterMessage("system", context)) + messages
+                } else {
+                    messages.map { if (it === system) system.copy(content = system.content + "\n\n" + context) else it }
+                }
+            } else messages
+
             val errors = mutableListOf<String>()
             for (config in active) {
                 try {
-                    return@withContext request(config, messages)
+                    return@withContext request(config, groundedMessages)
                 } catch (e: Exception) {
                     errors += "${config.provider.title}: ${e.message ?: "Request failed"}"
                 }
             }
             throw IllegalStateException("అన్ని enabled AI providers విఫలమయ్యాయి.\n" + errors.joinToString("\n"))
         }
+
+    private fun shouldUseLiveSearch(query: String): Boolean {
+        val q = query.lowercase()
+        val triggers = listOf(
+            "latest", "today", "current", "right now", "news", "live", "search web",
+            "search internet", "look up", "recent update", "current price", "weather",
+            "తాజా", "ఈరోజు", "ఇప్పటి", "ప్రస్తుతం", "వార్తలు", "వెతుకు", "సెర్చ్ చేయి"
+        )
+        return triggers.any { q.contains(it) }
+    }
 
     suspend fun test(config: ProviderConfig): String = withContext(Dispatchers.IO) {
         require(config.apiKey.isNotBlank()) { "${config.provider.title} API key add చేయండి." }
