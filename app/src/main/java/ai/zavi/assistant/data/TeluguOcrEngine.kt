@@ -46,7 +46,7 @@ object TeluguOcrEngine {
                 throw IllegalStateException("Telugu + English OCR engine initialize కాలేదు.")
             }
             engine.setImage(bitmap)
-            engine.utF8Text?.trim().orEmpty().ifBlank { "" }
+            engine.getUTF8Text()?.trim().orEmpty().ifBlank { "" }
         } finally {
             engine.end()
             bitmap.recycle()
