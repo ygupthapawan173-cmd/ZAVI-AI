@@ -86,10 +86,9 @@ class MainActivity : ComponentActivity() {
                 clearMessages = { conversationStore.clearMessages() },
                 ask = { prompt, history, memory, model ->
                     val token = securePrefs.getString(KEY_OPENROUTER, "") ?: ""
-                    val (_, messages) = AgentWorkflow.prepare(prompt, history, memory)
+                    val (state, messages) = AgentWorkflow.prepare(prompt, history, memory)
                     val answer = openRouterClient.complete(token, model, messages)
-                    val activeAgent = AgentRouterForUi.routeName(prompt)
-                    AgentReply(answer, activeAgent)
+                    AgentReply(answer, state.selectedAgent.title)
                 },
                 launchDeviceAction = { action -> DeviceActionLauncher.launch(this, action) },
                 startVoice = { onResult, onError -> startVoiceRecognition(onResult, onError) },
@@ -184,11 +183,6 @@ private data class AgentReply(
     val text: String,
     val agent: String
 )
-
-/* Kept in the app layer so the workflow's internal routing and UI label stay in sync. */
-private object AgentRouterForUi {
-    fun routeName(query: String): String = ai.zavi.assistant.core.AgentRouter.route(query).title
-}
 
 @Composable
 private fun ZaviApp(
