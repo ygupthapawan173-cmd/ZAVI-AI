@@ -3,7 +3,7 @@ package ai.zavi.assistant.core
 import ai.zavi.assistant.models.ChatMessage
 import ai.zavi.assistant.network.OpenRouterMessage
 
-data class AgentReply(val text: String, val agent: String)\n\ndata class AgentWorkflowState(
+data class AgentWorkflowState(
     val query: String,
     val selectedAgent: AgentType,
     val memoryContext: String,
