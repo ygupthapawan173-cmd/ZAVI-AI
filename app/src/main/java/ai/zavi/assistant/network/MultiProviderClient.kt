@@ -53,7 +53,7 @@ class MultiProviderClient(
 
     private fun request(config: ProviderConfig, messages: List<OpenRouterMessage>): String {
         val model = config.model.ifBlank { config.provider.defaultModel }
-        val (url, payload, keyHeader, keyPrefix) = when (config.provider) {
+        val (url, payload, keyHeader) = when (config.provider) {
             AiProvider.GEMINI -> {
                 val parts = JSONArray()
                 messages.filter { it.role != "system" }.forEach { parts.put(JSONObject().put("text", it.content)) }
