@@ -89,7 +89,7 @@ class MultiProviderClient(
             .addHeader(header, prefix + config.apiKey)
             .addHeader("Content-Type", "application/json")
             .post(payload.toRequestBody("application/json".toMediaType())).build()
-        client.newCall(request).execute().use { response ->
+        return client.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 val detail = try {
