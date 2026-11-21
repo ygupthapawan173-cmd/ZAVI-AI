@@ -5,6 +5,7 @@ dependencyResolutionManagement {
         google()
         maven { url = uri("https://maven.aliyun.com/repository/central") }
         mavenCentral()
+        maven { url = uri("https://jitpack.io") }
     }
 }
 rootProject.name = "ZAVI-AI"

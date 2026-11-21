@@ -4,9 +4,8 @@ import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import ai.zavi.assistant.data.TeluguOcrEngine
+import androidx.lifecycle.lifecycleScope
 import java.io.File
 import android.os.Bundle
 import android.speech.RecognitionListener
@@ -237,18 +236,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun recognizeImageText(uri: Uri, onSuccess: (String) -> Unit, onFailure: (String) -> Unit) {
-        try {
-            val image = InputImage.fromFilePath(this, uri)
-            val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-            recognizer.process(image).addOnSuccessListener { result ->
-                recognizer.close()
-                onSuccess(result.text)
-            }.addOnFailureListener { error ->
-                recognizer.close()
-                onFailure(error.localizedMessage ?: "OCR failed")
+        lifecycleScope.launch {
+            try {
+                val text = TeluguOcrEngine.recognize(this@MainActivity, uri)
+                onSuccess(text)
+            } catch (error: Exception) {
+                onFailure(error.localizedMessage ?: "Telugu + English OCR failed")
             }
-        } catch (error: Exception) {
-            onFailure(error.localizedMessage ?: "Image could not be opened")
         }
     }
     private fun loadProviderConfigs(): List<ProviderConfig> = AiProvider.values().map { provider ->

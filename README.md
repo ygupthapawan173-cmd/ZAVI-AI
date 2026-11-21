@@ -70,3 +70,14 @@ License boundary:
 - The inspected MAYA AI default branch did not contain a LICENSE file. It is linked only as an untouched reference; do not copy, modify, distribute or execute its code in ZAVI until the author provides permission or a license.
 
 ZAVI's own adapter and integration files live outside the submodules. They are separately written and do not alter either upstream repository. The upstream submodules are not yet compiled into the ZAVI APK as a single Android module: Kenji is a standalone Android app project, while MAYA is a Python backend with external database and service requirements. The bridge between them remains a separate integration task.
+
+
+## All-in-One upgrade cycle (integration branch)
+
+- **Web Research:** current DuckDuckGo HTML retrieval is used only when the request calls for live information; successfully retrieved HTTP(S) sources are appended as a source list. Search availability depends on DuckDuckGo access and is not guaranteed.
+- **Voice:** tap-to-talk Telugu speech input and optional Android TTS replies remain foreground, user-triggered. No always-listening wake word is enabled.
+- **Autonomous workflow:** explicit agent-mode phrases invoke Planner → Specialist → Reviewer. Each stage uses configured cloud provider APIs and may consume additional quota.
+- **Coding and Creator agents:** specialist routing supports coding/debugging and Telugu-English Shorts/Reels scripts, captions and hashtags. It does not silently edit local files or publish content.
+- **Phone automation:** WorkManager reminders and confirmation-based Android intents are available. Android settings changes and message sending remain user-controlled.
+- **Dashboard:** provider readiness, reminders, voice mode and quick actions are shown in the Compose workspace.
+- **Telugu + English OCR:** camera images are processed with Tesseract4Android. English and Telugu language models are downloaded once into app-private storage on first OCR use; OCR then works offline. The first run requires internet and storage space. OCR output quality depends on photo clarity and font.

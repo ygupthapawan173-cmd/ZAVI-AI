@@ -41,8 +41,10 @@ class MultiProviderClient(
             val query = messages.lastOrNull { it.role == "user" }?.content.orEmpty()
             val researchMode = shouldUseLiveSearch(query) ||
                 messages.firstOrNull { it.role == "system" }?.content?.contains("Research Assistant") == true
-            val groundedMessages = if (researchMode && query.isNotBlank()) {
-                val sources = runCatching { webResearchClient.search(query, 5) }.getOrElse { emptyList() }
+            val sources = if (researchMode && query.isNotBlank()) {
+                runCatching { webResearchClient.search(query, 5) }.getOrElse { emptyList() }
+            } else emptyList()
+            val groundedMessages = if (sources.isNotEmpty()) {
                 val context = webResearchClient.asGroundedContext(query, sources)
                 val system = messages.firstOrNull { it.role == "system" }
                 if (system == null) {
@@ -54,17 +56,20 @@ class MultiProviderClient(
 
             val containsImage = query.contains("[[ZAVI_IMAGE:")
             val orchestrationRequested = shouldOrchestrate(query) && !containsImage
-            if (orchestrationRequested) {
-                return@withContext runOrchestrated(active, groundedMessages)
+            val answer = if (orchestrationRequested) {
+                runOrchestrated(active, groundedMessages)
+            } else {
+                requestWithFallback(active, groundedMessages)
             }
-            requestWithFallback(active, groundedMessages)
+            ResearchCitationFormatter.append(answer, sources)
         }
 
     private fun shouldOrchestrate(query: String): Boolean {
         val q = query.lowercase()
         return listOf(
             "multi-agent", "multi agent", "team of agents", "orchestrate this",
-            "agent team", "మల్టీ ఏజెంట్", "ఏజెంట్ టీమ్"
+            "agent team", "autonomous agent", "agent mode", "plan execute review",
+            "మల్టీ ఏజెంట్", "ఏజెంట్ టీమ్", "ఆటోనమస్ ఏజెంట్", "ఏజెంట్ మోడ్"
         ).any { q.contains(it) }
     }
 

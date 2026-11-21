@@ -65,7 +65,7 @@ object AgentRouter {
         val q = query.trim().lowercase()
 
         return when {
-            containsAny(q, listOf("shorts script", "reel script", "creator studio", "thumbnail idea", "hashtags", "షార్ట్స్ స్క్రిప్ట్")) -> AgentType.CREATOR
+            containsAny(q, listOf("shorts script", "reel script", "creator studio", "thumbnail idea", "hashtags", "create a reel", "make a reel", "create a short", "youtube shorts", "write a caption", "షార్ట్స్ స్క్రిప్ట్", "రీల్ తయారు చేయి")) -> AgentType.CREATOR
 
             containsAny(q, listOf("youtube", "video search", "find videos", "youtube videos", "యూట్యూబ్ వీడియోలు")) -> AgentType.VIDEO
 
@@ -77,7 +77,7 @@ object AgentRouter {
             containsAny(q, listOf(
                 "fix this code", "debug", "compile error", "gradle", "kotlin", "python",
                 "javascript", "typescript", "programming", "write code", "code review",
-                "github", "api integration", "కోడ్", "ఎర్రర్ సరిచేయి"
+                "github", "api integration", "termux", "claude code", "build failed", "fix my code", "కోడ్", "ఎర్రర్ సరిచేయి"
             )) -> AgentType.CODE
 
             containsAny(q, listOf(
