@@ -527,8 +527,11 @@ private fun ZaviApp(
                             if (!line.isUser && line.agent.isNotBlank()) {
                                 Text(line.agent, color = Color(0xFF67E8F9), fontSize = 10.sp)
                             }
+                            val safeContent = line.content.takeUnless {
+                                it.isBlank() || it.equals("null", ignoreCase = true)
+                            } ?: "AI నుంచి ఖాళీ సమాధానం వచ్చింది. మళ్లీ ప్రయత్నించండి."
                             Text(
-                                line.content,
+                                safeContent,
                                 modifier = Modifier.widthIn(max = 320.dp)
                                     .background(
                                         if (line.isUser) Color(0xFF49318A) else Color(0xFF20243A),
