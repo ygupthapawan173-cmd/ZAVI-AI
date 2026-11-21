@@ -6,6 +6,7 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import ai.zavi.assistant.data.TeluguOcrEngine
+import ai.zavi.assistant.accessibility.ZaviAccessibilityService
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -494,6 +495,40 @@ private fun ZaviApp(
 
                 lines.add(ChatMessage(role = "user", content = command))
                 saveMessages(lines.toList())
+
+                // Execute only clear, explicitly spoken accessibility commands.
+                val normalizedCommand = command.trim()
+                val lowerCommand = normalizedCommand.lowercase(Locale.ROOT)
+                val accessibilityResult: String? = when {
+                    lowerCommand in listOf("scroll down", "కిందికి స్క్రోల్", "కిందికి జరుపు") ->
+                        if (ZaviAccessibilityService.scrollDown()) "Screen కిందికి scroll చేశాను." else "Scroll చేయలేకపోయాను. Accessibility ON ఉందా, ఈ screen scrollableనా check చేయి."
+                    lowerCommand in listOf("scroll up", "పైకి స్క్రోల్", "పైకి జరుపు") ->
+                        if (ZaviAccessibilityService.scrollUp()) "Screen పైకి scroll చేశాను." else "పైకి scroll చేయలేకపోయాను."
+                    lowerCommand.startsWith("click ") || lowerCommand.startsWith("tap text ") || lowerCommand.startsWith("క్లిక్ ") ->
+                        run {
+                            val label = when {
+                                lowerCommand.startsWith("click ") -> normalizedCommand.drop(6).trim()
+                                lowerCommand.startsWith("tap text ") -> normalizedCommand.drop(9).trim()
+                                else -> normalizedCommand.drop(6).trim()
+                            }
+                            if (ZaviAccessibilityService.clickText(label)) "'$label' పై tap చేశాను." else "'$label' కనిపించలేదు లేదా tap చేయలేకపోయాను."
+                        }
+                    lowerCommand.startsWith("type ") || lowerCommand.startsWith("టైప్ ") ->
+                        run {
+                            val value = if (lowerCommand.startsWith("type ")) normalizedCommand.drop(5) else normalizedCommand.drop(5)
+                            if (ZaviAccessibilityService.typeInFocusedField(value)) "Text enter చేశాను." else "Text field focusలో లేదు. ముందుగా text box select చేయి."
+                        }
+                    else -> null
+                }
+                if (accessibilityResult != null) {
+                    lines.add(ChatMessage(role = "assistant", content = accessibilityResult, agent = "Accessibility"))
+                    saveMessages(lines.toList())
+                    voiceStatus = accessibilityResult
+                    speak(accessibilityResult)
+                    delay(900)
+                    continue
+                }
+
                 busy = true
                 voiceStatus = "మీ command అందింది… ZAVI ఆలోచిస్తోంది"
                 try {
