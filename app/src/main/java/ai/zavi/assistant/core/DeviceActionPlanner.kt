@@ -4,15 +4,15 @@ import java.util.Locale
 
 object DeviceActionPlanner {
     private val callPattern = Regex(
-        """^(?:call|dial|phone)s+([+0-9][+0-9() .-]{4,})$""",
+        """^(?:call|dial|phone)\\s+([+0-9][+0-9() .-]{4,})$""",
         RegexOption.IGNORE_CASE
     )
     private val smsPattern = Regex(
-        """^(?:sms|text|send sms)s+(?:tos+)?([+0-9][+0-9() .-]{4,})s+(?:saying|message|:)s*(.+)$""",
+        """^(?:sms|text|send sms)\\s+(?:to\\s+)?([+0-9][+0-9() .-]{4,})\\s+(?:saying|message|:)\\s*(.+)$""",
         RegexOption.IGNORE_CASE
     )
     private val whatsappPattern = Regex(
-        """^(?:whatsapp|send whatsapp)s+(?:tos+)?([+0-9][+0-9() .-]{4,})s+(?:saying|message|:)s*(.+)$""",
+        """^(?:whatsapp|send whatsapp)\\s+(?:to\\s+)?([+0-9][+0-9() .-]{4,})\\s+(?:saying|message|:)\\s*(.+)$""",
         RegexOption.IGNORE_CASE
     )
 
