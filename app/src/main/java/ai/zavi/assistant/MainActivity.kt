@@ -85,6 +85,7 @@ class MainActivity : ComponentActivity() {
                 loadMessages = { conversationStore.loadMessages() },
                 saveMessages = { conversationStore.saveMessages(it) },
                 clearMessages = { conversationStore.clearMessages() },
+                clearMemory = { conversationStore.clearMemory() },
                 ask = { prompt, history, memory, model ->
                     val token = securePrefs.getString(KEY_OPENROUTER, "") ?: ""
                     val (state, messages) = AgentWorkflow.prepare(prompt, history, memory)
@@ -237,6 +238,7 @@ private fun ZaviApp(
     loadMessages: () -> List<ChatMessage>,
     saveMessages: (List<ChatMessage>) -> Unit,
     clearMessages: () -> Unit,
+    clearMemory: () -> Unit,
     ask: suspend (String, List<ChatMessage>, String, String) -> AgentReply,
     launchDeviceAction: (DeviceAction) -> String,
     startVoice: ((String) -> Unit, (String) -> Unit) -> Unit,
@@ -515,6 +517,12 @@ private fun ZaviApp(
                                 clearMessages()
                                 showSettings = false
                             }) { Text("Clear chat") }
+                            TextButton(onClick = {
+                                memory = ""
+                                saveMemory("")
+                                clearMemory()
+                                voiceStatus = "Saved memory cleared."
+                            }) { Text("Clear memory") }
                             TextButton(onClick = { showSettings = false }) { Text("Close") }
                         }
                     }
