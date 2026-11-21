@@ -382,36 +382,71 @@ private fun ZaviApp(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column {
-                        Text("ZAVI AI", fontSize = 28.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                        Text("Cloud intelligence • Telugu + English", fontSize = 12.sp, color = Color(0xFF9CA3AF))
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("ZAVI", fontSize = 30.sp, color = Color.White, fontWeight = FontWeight.ExtraBold)
+                        Text("ALL-IN-ONE AI", fontSize = 10.sp, color = Color(0xFF67E8F9), fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                        Text("Telugu • English • Cloud intelligence", fontSize = 11.sp, color = Color(0xFF9CA3AF))
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         TextButton(onClick = { voiceReplies = !voiceReplies }) {
-                            Text(if (voiceReplies) "Voice replies ON" else "Voice replies OFF", color = Color(0xFF67E8F9))
+                            Text(if (voiceReplies) "🔊 Voice ON" else "🔇 Voice OFF", color = Color(0xFF67E8F9))
                         }
                         TextButton(onClick = { shareChat(lines.toList()) }) {
-                            Text("Share", color = Color(0xFF67E8F9))
-                        }
-                        TextButton(onClick = {
-                            reminders = loadReminders()
-                            requestNotificationPermission()
-                            showAutomation = true
-                        }) {
-                            Text("Automation", color = Color(0xFFC084FC))
-                        }
-                        TextButton(onClick = {
-                            providers = loadProviders()
-                            providerTestStatus = ""
-                            memory = loadMemory()
-                            showSettings = true
-                        }) {
-                            Text("Settings", color = Color(0xFF67E8F9))
+                            Text("Share chat", color = Color(0xFF67E8F9))
                         }
                     }
                 }
 
+                Spacer(Modifier.height(10.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF171D35))
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text("Your AI workspace", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "${providers.count { it.enabled && it.apiKey.isNotBlank() }} AI providers ready  •  ${reminders.size} reminders  •  ${if (voiceReplies) "Voice enabled" else "Text mode"}",
+                            color = Color(0xFF9CA3AF), fontSize = 11.sp
+                        )
+                    }
+                }
+
                 Spacer(Modifier.height(8.dp))
+                Text("QUICK ACTIONS", color = Color(0xFF9CA3AF), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { prompt = "Search the web for: " }, modifier = Modifier.weight(1f)) {
+                        Text("🌐 Web", color = Color(0xFF67E8F9), fontSize = 11.sp)
+                    }
+                    TextButton(onClick = { prompt = "Help me write or debug code for: " }, modifier = Modifier.weight(1f)) {
+                        Text("💻 Code", color = Color(0xFFC084FC), fontSize = 11.sp)
+                    }
+                    TextButton(onClick = { prompt = "Create social media content about: " }, modifier = Modifier.weight(1f)) {
+                        Text("✨ Create", color = Color(0xFFF0ABFC), fontSize = 11.sp)
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { prompt = "Research this topic in depth: " }, modifier = Modifier.weight(1f)) {
+                        Text("🔎 Research", color = Color(0xFF67E8F9), fontSize = 11.sp)
+                    }
+                    TextButton(onClick = {
+                        reminders = loadReminders()
+                        requestNotificationPermission()
+                        showAutomation = true
+                    }, modifier = Modifier.weight(1f)) {
+                        Text("⏰ Automation", color = Color(0xFFC084FC), fontSize = 11.sp)
+                    }
+                    TextButton(onClick = {
+                        providers = loadProviders()
+                        providerTestStatus = ""
+                        memory = loadMemory()
+                        showSettings = true
+                    }, modifier = Modifier.weight(1f)) {
+                        Text("⚙ Settings", color = Color(0xFF67E8F9), fontSize = 11.sp)
+                    }
+                }
+
+                Spacer(Modifier.height(6.dp))
                 if (voiceStatus.isNotBlank()) {
                     Text(voiceStatus, color = Color(0xFF9CA3AF), fontSize = 11.sp)
                 }
