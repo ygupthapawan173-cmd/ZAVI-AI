@@ -1,7 +1,12 @@
 package ai.zavi.assistant.data
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import android.net.Uri
 import com.googlecode.tesseract.android.TessBaseAPI
 import kotlinx.coroutines.Dispatchers
@@ -13,7 +18,7 @@ import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 
 object OcrLanguageConfig {
-    const val LANGUAGES = "eng+tel"
+    const val LANGUAGES = "tel+eng"
     val modelUrls = mapOf(
         "eng" to "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/eng.traineddata",
         "tel" to "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/tel.traineddata"
@@ -21,6 +26,7 @@ object OcrLanguageConfig {
 }
 
 object TeluguOcrEngine {
+    private const val OCR_TARGET_MAX_SIDE = 2400
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(90, TimeUnit.SECONDS)
@@ -38,19 +44,52 @@ object TeluguOcrEngine {
             if (!model.exists() || model.length() == 0L) downloadModel(url, model)
         }
 
-        val bitmap = context.contentResolver.openInputStream(uri)?.use(BitmapFactory::decodeStream)
+        val source = context.contentResolver.openInputStream(uri)?.use(BitmapFactory::decodeStream)
             ?: throw IllegalArgumentException("Photo open చేయలేకపోయాను.")
+        val processed = try {
+            preprocessForOcr(source)
+        } finally {
+            source.recycle()
+        }
         val engine = TessBaseAPI()
         try {
             if (!engine.init(dataRoot.absolutePath, OcrLanguageConfig.LANGUAGES)) {
                 throw IllegalStateException("Telugu + English OCR engine initialize కాలేదు.")
             }
-            engine.setImage(bitmap)
-            engine.getUTF8Text()?.trim().orEmpty().ifBlank { "" }
+            engine.setImage(processed)
+            engine.getUTF8Text()?.trim().orEmpty()
         } finally {
             engine.recycle()
-            bitmap.recycle()
+            processed.recycle()
         }
+    }
+
+    /**
+     * OCR-only copy: upscale small text and improve grayscale contrast.
+     * The original photo remains untouched for the vision model.
+     */
+    private fun preprocessForOcr(source: Bitmap): Bitmap {
+        val longestSide = maxOf(source.width, source.height)
+        val scale = if (longestSide < OCR_TARGET_MAX_SIDE) {
+            minOf(2f, OCR_TARGET_MAX_SIDE.toFloat() / longestSide)
+        } else 1f
+        val width = (source.width * scale).toInt().coerceAtLeast(1)
+        val height = (source.height * scale).toInt().coerceAtLeast(1)
+        val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val contrast = ColorMatrix().apply {
+            set(floatArrayOf(
+                1.25f, 0f, 0f, 0f, -28f,
+                0f, 1.25f, 0f, 0f, -28f,
+                0f, 0f, 1.25f, 0f, -28f,
+                0f, 0f, 0f, 1f, 0f
+            ))
+        }
+        val grayscale = ColorMatrix().apply { setSaturation(0f); postConcat(contrast) }
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+            colorFilter = ColorMatrixColorFilter(grayscale)
+        }
+        Canvas(output).drawBitmap(source, null, android.graphics.Rect(0, 0, width, height), paint)
+        return output
     }
 
     private fun downloadModel(url: String, destination: File) {
