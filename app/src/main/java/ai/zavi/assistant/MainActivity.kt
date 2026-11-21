@@ -93,7 +93,19 @@ class MainActivity : ComponentActivity() {
                 },
                 launchDeviceAction = { action -> DeviceActionLauncher.launch(this, action) },
                 startVoice = { onResult, onError -> startVoiceRecognition(onResult, onError) },
-                speak = { speakText(it) }
+                speak = { speakText(it) },
+                shareChat = { messages ->
+                    val transcript = messages.joinToString("\n\n") { message ->
+                        val speaker = if (message.isUser) "You" else "ZAVI AI"
+                        "$speaker: ${message.content}"
+                    }
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "ZAVI AI chat")
+                        putExtra(Intent.EXTRA_TEXT, transcript)
+                    }
+                    startActivity(Intent.createChooser(shareIntent, "Share ZAVI chat"))
+                }
             )
         }
     }
@@ -228,7 +240,8 @@ private fun ZaviApp(
     ask: suspend (String, List<ChatMessage>, String, String) -> AgentReply,
     launchDeviceAction: (DeviceAction) -> String,
     startVoice: ((String) -> Unit, (String) -> Unit) -> Unit,
-    speak: (String) -> Unit
+    speak: (String) -> Unit,
+    shareChat: (List<ChatMessage>) -> Unit
 ) {
     var prompt by remember { mutableStateOf("") }
     var key by remember { mutableStateOf(getKey()) }
@@ -287,6 +300,9 @@ private fun ZaviApp(
                     Column(horizontalAlignment = Alignment.End) {
                         TextButton(onClick = { voiceReplies = !voiceReplies }) {
                             Text(if (voiceReplies) "Voice replies ON" else "Voice replies OFF", color = Color(0xFF67E8F9))
+                        }
+                        TextButton(onClick = { shareChat(lines.toList()) }) {
+                            Text("Share", color = Color(0xFF67E8F9))
                         }
                         TextButton(onClick = {
                             key = getKey()
