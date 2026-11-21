@@ -52,16 +52,66 @@ class MultiProviderClient(
                 }
             } else messages
 
-            val errors = mutableListOf<String>()
-            for (config in active) {
-                try {
-                    return@withContext request(config, groundedMessages)
-                } catch (e: Exception) {
-                    errors += "${config.provider.title}: ${e.message ?: "Request failed"}"
-                }
+            val orchestrationRequested = shouldOrchestrate(query)
+            if (orchestrationRequested) {
+                return@withContext runOrchestrated(active, groundedMessages)
             }
-            throw IllegalStateException("అన్ని enabled AI providers విఫలమయ్యాయి.\n" + errors.joinToString("\n"))
+            requestWithFallback(active, groundedMessages)
         }
+
+    private fun shouldOrchestrate(query: String): Boolean {
+        val q = query.lowercase()
+        return listOf(
+            "multi-agent", "multi agent", "team of agents", "orchestrate this",
+            "agent team", "మల్టీ ఏజెంట్", "ఏజెంట్ టీమ్"
+        ).any { q.contains(it) }
+    }
+
+    private fun requestWithFallback(
+        active: List<ProviderConfig>,
+        messages: List<OpenRouterMessage>
+    ): String {
+        val errors = mutableListOf<String>()
+        for (config in active) {
+            try {
+                return request(config, messages)
+            } catch (e: Exception) {
+                errors += "${config.provider.title}: ${e.message ?: "Request failed"}"
+            }
+        }
+        throw IllegalStateException("అన్ని enabled AI providers విఫలమయ్యాయి.\n" + errors.joinToString("\n"))
+    }
+
+    private fun runOrchestrated(
+        active: List<ProviderConfig>,
+        original: List<OpenRouterMessage>
+    ): String {
+        val system = original.firstOrNull { it.role == "system" }
+            ?: OpenRouterMessage("system", "You are ZAVI AI. Reply in the user's language.")
+        val userTask = original.lastOrNull { it.role == "user" }?.content.orEmpty()
+        val history = original.filter { it.role == "user" || it.role == "assistant" }
+            .dropLast(1).takeLast(8)
+
+        val plannerMessages = listOf(
+            system.copy(content = system.content + "\nYou are the Planning Agent. Break the user's request into clear objectives, constraints, risks, and a short execution plan. Do not answer the task yet."),
+            *history.toTypedArray(),
+            OpenRouterMessage("user", userTask)
+        )
+        val plan = requestWithFallback(active, plannerMessages)
+
+        val specialistMessages = listOf(
+            system.copy(content = system.content + "\nYou are the Specialist Agent. Execute the user's task using the supplied plan. Be concrete and produce the actual requested result."),
+            OpenRouterMessage("user", "USER TASK:\n" + userTask + "\n\nPLANNER OUTPUT:\n" + plan)
+        )
+        val work = requestWithFallback(active, specialistMessages)
+
+        val reviewerMessages = listOf(
+            system.copy(content = system.content + "\nYou are the Quality Reviewer Agent. Check the draft for correctness, completeness, contradictions, unsupported claims, and safety. Fix issues and return only the improved final answer. Do not claim external verification that did not happen."),
+            OpenRouterMessage("user", "USER TASK:\n" + userTask + "\n\nPLAN:\n" + plan + "\n\nSPECIALIST DRAFT:\n" + work)
+        )
+        val reviewed = requestWithFallback(active, reviewerMessages)
+        return "🤝 Multi-Agent Workflow (Planner → Specialist → Reviewer)\n\n" + reviewed
+    }
 
     private fun shouldUseLiveSearch(query: String): Boolean {
         val q = query.lowercase()
