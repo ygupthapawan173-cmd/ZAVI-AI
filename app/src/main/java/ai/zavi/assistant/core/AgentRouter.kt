@@ -44,6 +44,16 @@ enum class AgentType(
         "scheme",
         "Schemes Assistant",
         "Help explain Indian government schemes, subsidies and eligibility. Prefer official sources for current details. Do not invent scheme names, benefits, deadlines or eligibility."
+    ),
+    VIDEO(
+        "video",
+        "Video Research Agent",
+        "Find and compare relevant YouTube/video resources using retrieved web results. Give exact source URLs, explain why each result is useful, and never invent video titles, channels, links, views or upload dates."
+    ),
+    CREATOR(
+        "creator",
+        "Creator Studio Agent",
+        "Create original Telugu-English creator assets: YouTube Shorts scripts, hooks, shot lists, captions, hashtags, thumbnail concepts and posting plans. Do not claim to publish or upload content. Keep facts verifiable and label creative suggestions."
     )
 }
 
@@ -55,6 +65,10 @@ object AgentRouter {
         val q = query.trim().lowercase()
 
         return when {
+            containsAny(q, listOf("youtube", "video search", "find videos", "youtube videos", "యూట్యూబ్ వీడియోలు")) -> AgentType.VIDEO
+
+            containsAny(q, listOf("shorts script", "reel script", "creator studio", "thumbnail idea", "hashtags", "షార్ట్స్ స్క్రిప్ట్")) -> AgentType.CREATOR
+
             containsAny(q, listOf(
                 "government scheme", "govt scheme", "subsidy", "scheme", "loan scheme",
                 "పథకం", "సబ్సిడీ", "ప్రభుత్వ పథకం"
