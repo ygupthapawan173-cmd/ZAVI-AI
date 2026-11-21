@@ -211,16 +211,7 @@ class MultiProviderClient(
                 throw IllegalStateException(detail?.takeIf { it.isNotBlank() }
                     ?: "HTTP ${response.code}")
             }
-            val answer = try {
-                if (config.provider == AiProvider.GEMINI) {
-                    JSONObject(raw).getJSONArray("candidates").getJSONObject(0)
-                        .getJSONObject("content").getJSONArray("parts").getJSONObject(0).optString("text")
-                } else {
-                    JSONObject(raw).getJSONArray("choices").getJSONObject(0)
-                        .getJSONObject("message").optString("content")
-                }
-            } catch (_: Exception) { "" }
-            answer.trim().ifBlank { throw IllegalStateException("ఖాళీ response వచ్చింది") }
+            AssistantResponseParser.extract(raw, config.provider)
         }
     }
 }
