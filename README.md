@@ -47,3 +47,23 @@ The default model is `openrouter/free`, which routes to currently available free
 
 ## Scope
 This is a staged implementation. Phase 1 is a working foundation, not the finished two-phase assistant. Research routing currently changes the agent instructions; it does not yet perform live web search. Phase 2 will add phone tools and external services incrementally, subject to Android OS restrictions and provider availability.
+
+## Untouched upstream references
+
+The reference repositories are pinned as Git submodules. Their source files are not modified in this ZAVI branch.
+
+Initialize the pinned sources after cloning:
+
+```bash
+git submodule update --init --recursive
+```
+
+Pinned upstream commits:
+- Kenji: `001kenji/Assistant-AI-Code@fafcbdf9374738c588624a8e38bd67a9c68db8e9`
+- MAYA AI: `dev-infinity101/MAYA-AI@d296d5cae6384cbdf78bb3bcdaf850dcd3129fa8`
+
+License boundary:
+- Kenji declares PolyForm Noncommercial 1.0.0. Any permitted use must retain its required copyright notice and comply with the non-commercial terms. Commercial use requires written permission from its copyright holder.
+- The inspected MAYA AI default branch did not contain a LICENSE file. It is linked only as an untouched reference; do not copy, modify, distribute or execute its code in ZAVI until the author provides permission or a license.
+
+ZAVI's own adapter and integration files live outside the submodules. They are separately written and do not alter either upstream repository. The upstream submodules are not yet compiled into the ZAVI APK as a single Android module: Kenji is a standalone Android app project, while MAYA is a Python backend with external database and service requirements. The bridge between them remains a separate integration task.
