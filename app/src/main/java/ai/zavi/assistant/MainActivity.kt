@@ -38,6 +38,8 @@ import ai.zavi.assistant.core.CalculatorEngine
 import ai.zavi.assistant.core.DeviceAction
 import ai.zavi.assistant.core.DeviceActionLauncher
 import ai.zavi.assistant.core.DeviceActionPlanner
+import ai.zavi.assistant.core.ReminderManager
+import ai.zavi.assistant.core.ZaviReminder
 import ai.zavi.assistant.data.ConversationStore
 import ai.zavi.assistant.data.DocumentTextExtractor
 import ai.zavi.assistant.data.ImportedDocument
@@ -106,6 +108,10 @@ class MainActivity : ComponentActivity() {
                 launchDeviceAction = { action -> DeviceActionLauncher.launch(this, action) },
                 startVoice = { onResult, onError -> startVoiceRecognition(onResult, onError) },
                 speak = { speakText(it) },
+                loadReminders = { ReminderManager.list(this) },
+                addReminder = { title, delay, daily -> ReminderManager.add(this, title, delay, daily) },
+                setReminderEnabled = { id, enabled -> ReminderManager.setEnabled(this, id, enabled) },
+                deleteReminder = { id -> ReminderManager.delete(this, id) },
                 shareChat = { messages ->
                     val transcript = messages.joinToString("\n\n") { message ->
                         val speaker = if (message.isUser) "You" else "ZAVI AI"
@@ -279,7 +285,11 @@ private fun ZaviApp(
     launchDeviceAction: (DeviceAction) -> String,
     startVoice: ((String) -> Unit, (String) -> Unit) -> Unit,
     speak: (String) -> Unit,
-    shareChat: (List<ChatMessage>) -> Unit
+    shareChat: (List<ChatMessage>) -> Unit,
+    loadReminders: () -> List<ZaviReminder>,
+    addReminder: (String, Long, Boolean) -> Unit,
+    setReminderEnabled: (String, Boolean) -> Unit,
+    deleteReminder: (String) -> Unit
 ) {
     var prompt by remember { mutableStateOf("") }
     var attachedDocument by remember { mutableStateOf<ImportedDocument?>(null) }
@@ -288,6 +298,11 @@ private fun ZaviApp(
     var providerTestStatus by remember { mutableStateOf("") }
     var memory by remember { mutableStateOf(loadMemory()) }
     var showSettings by remember { mutableStateOf(false) }
+    var showAutomation by remember { mutableStateOf(false) }
+    var reminders by remember { mutableStateOf(loadReminders()) }
+    var reminderTitle by remember { mutableStateOf("") }
+    var reminderDelay by remember { mutableStateOf("15") }
+    var reminderDaily by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var voiceReplies by remember { mutableStateOf(false) }
     var voiceStatus by remember { mutableStateOf("") }
@@ -569,6 +584,67 @@ private fun ZaviApp(
                             voiceStatus = "Action cancelled."
                         }) { Text("Cancel") }
                     }
+                )
+            }
+
+            if (showAutomation) {
+                AlertDialog(
+                    onDismissRequest = { showAutomation = false },
+                    title = { Text("Automation Center") },
+                    text = {
+                        Column(
+                            modifier = Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("Create local phone reminders. One-time and daily reminders are supported.", fontSize = 12.sp, color = Color.Gray)
+                            OutlinedTextField(value = reminderTitle, onValueChange = { reminderTitle = it }, label = { Text("Reminder title") }, singleLine = true)
+                            OutlinedTextField(value = reminderDelay, onValueChange = { reminderDelay = it.filter(Char::isDigit).take(5) }, label = { Text("Remind after (minutes)") }, singleLine = true)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Repeat every day", modifier = Modifier.weight(1f), color = Color.White)
+                                Switch(checked = reminderDaily, onCheckedChange = { reminderDaily = it })
+                            }
+                            Button(
+                                onClick = {
+                                    val delay = reminderDelay.toLongOrNull()
+                                    if (reminderTitle.isNotBlank() && delay != null && delay > 0) {
+                                        addReminder(reminderTitle, delay, reminderDaily)
+                                        reminders = loadReminders()
+                                        reminderTitle = ""
+                                        reminderDelay = "15"
+                                    }
+                                },
+                                enabled = reminderTitle.isNotBlank() && (reminderDelay.toLongOrNull() ?: 0L) > 0
+                            ) { Text("Add reminder") }
+                            Divider()
+                            if (reminders.isEmpty()) Text("No reminders yet.", color = Color.Gray)
+                            reminders.forEach { reminder ->
+                                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF20243A))) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(reminder.title, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                            Text("After ${reminder.delayMinutes} min • ${if (reminder.daily) "Daily" else "Once"}", color = Color.Gray, fontSize = 11.sp)
+                                        }
+                                        Switch(
+                                            checked = reminder.enabled,
+                                            onCheckedChange = {
+                                                setReminderEnabled(reminder.id, it)
+                                                reminders = loadReminders()
+                                            }
+                                        )
+                                        TextButton(onClick = {
+                                            deleteReminder(reminder.id)
+                                            reminders = loadReminders()
+                                        }) { Text("Delete", color = Color(0xFFFCA5A5)) }
+                                    }
+                                }
+                            }
+                            Text("Note: daily reminders repeat every 24 hours after the initial delay. Android may delay notifications due to battery restrictions.", color = Color.Gray, fontSize = 10.sp)
+                        }
+                    },
+                    confirmButton = { TextButton(onClick = { showAutomation = false }) { Text("Close") } }
                 )
             }
 
