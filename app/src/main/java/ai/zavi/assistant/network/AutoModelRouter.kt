@@ -15,8 +15,9 @@ object AutoModelRouter {
         if (query.contains("[[ZAVI_IMAGE:")) return ZaviTaskType.IMAGE
 
         val text = "$query $system".lowercase()
+        val queryText = query.lowercase()
         if (Regex("[\\u0C00-\\u0C7F]").containsMatchIn(query) ||
-            listOf("telugu", "తెలుగు", "తెలుగులో", "telugu assistant").any { text.contains(it) }) {
+            listOf("telugu", "తెలుగు", "తెలుగులో").any { queryText.contains(it) }) {
             return ZaviTaskType.TELUGU
         }
         if (listOf("code assistant", "coding", "debug", "compile error", "github", "termux", "కోడ్").any { text.contains(it) }) {
