@@ -48,7 +48,7 @@ object TeluguOcrEngine {
             engine.setImage(bitmap)
             engine.getUTF8Text()?.trim().orEmpty().ifBlank { "" }
         } finally {
-            engine.end()
+            engine.recycle()
             bitmap.recycle()
         }
     }
