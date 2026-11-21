@@ -1,19 +1,49 @@
 # ZAVI AI
 
-Premium dark Android AI assistant starter.
+A free-first Android AI assistant prototype built with Kotlin and Jetpack Compose.
 
-## Included
-- Jetpack Compose chat UI with neon styling
-- Telugu/English system prompt
-- OpenRouter chat-completions connection
-- API key entry stored with AndroidX EncryptedSharedPreferences
-- GitHub Actions debug APK build
+## Current integration branch
+
+Branch: `integration/two-phase-zavi`
+
+### Phase 1 foundation now included
+- Modular local agent router: General, Research, Finance, Market, Brand, Marketing and Schemes.
+- Agent workflow prompt/state builder inspired by MAYA's routing and graph-state approach.
+- OpenRouter chat client with `openrouter/free` as the default model route.
+- Telugu / Telugu transliteration / English prompt handling.
+- Local encrypted conversation history and user-approved memory context.
+- Tap-to-talk SpeechRecognizer input and Android TextToSpeech replies.
+- OpenRouter API key and model configuration stored with AndroidX EncryptedSharedPreferences.
+- Existing premium dark neon Compose UI retained.
+
+### Phase 2 planned
+- Wake-word / foreground voice mode with clear microphone notification and stop control.
+- Floating assistant bubble.
+- Permission-gated Android actions: dialer, messaging intents, app launch, torch, volume and settings panels.
+- Camera capture and OCR.
+- Reminders, calendar, routines and navigation shortcuts.
+- Optional web research/news/weather integrations with clearly disclosed provider limits.
+- More advanced local intent recognition and tool workflows.
 
 ## Build
-GitHub Actions builds a debug APK on push to main/master or manual workflow dispatch and uploads it as an artifact.
+GitHub Actions builds the debug APK on push to main/master or manual workflow dispatch. The integration branch can be built by selecting it in the Actions UI after the branch is pushed.
 
 ## API key
-Open ZAVI AI > Settings and paste your OpenRouter key. Never commit API keys or place them in source code.
+Open ZAVI AI > Settings and paste your OpenRouter API key. Never commit API keys or paste them into chat.
 
-## Scope note
-This is an integrated initial app foundation, not yet the entire long-term assistant feature set. Persistent chat history, speech input/output, offline LLM, wake word, multi-agent tools, and device automation still need implementation and testing. Sensitive device actions must require explicit confirmation.
+The default model is `openrouter/free`, which routes to currently available free models. Free routing is subject to provider availability and rate limits; choosing a paid model may incur charges.
+
+## Privacy and safety
+- API keys, saved chat history and user-approved memory are kept in encrypted app preferences on the device.
+- Voice input starts only after the user taps the microphone and grants Android microphone permission.
+- No always-on microphone is implemented in this phase.
+- Sensitive phone actions in Phase 2 must use Android permission flows and explicit user confirmation.
+- No silent message sending, hidden recording or undisclosed cloud upload is intended.
+
+## Reference and licensing notes
+- Kenji (https://github.com/001kenji/Assistant-AI-Code) is licensed under PolyForm Noncommercial 1.0.0. Its license and required notice must be observed for any permitted reuse. No Kenji source file or model asset is copied into this branch.
+- MAYA AI (https://github.com/dev-infinity101/MAYA-AI) did not expose a LICENSE file in the inspected default-branch tree. Its source code is therefore not copied. ZAVI independently implements general agent-routing and workflow concepts.
+- ZAVI's Kotlin implementation is written for this app rather than importing either project as a dependency.
+
+## Scope
+This is a staged implementation. Phase 1 is a working foundation, not the finished two-phase assistant. Research routing currently changes the agent instructions; it does not yet perform live web search. Phase 2 will add phone tools and external services incrementally, subject to Android OS restrictions and provider availability.
