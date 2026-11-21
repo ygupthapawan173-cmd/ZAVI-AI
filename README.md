@@ -14,6 +14,9 @@ Branch: `integration/two-phase-zavi`
 - Local encrypted conversation history and user-approved memory context.
 - Tap-to-talk SpeechRecognizer input and Android TextToSpeech replies.
 - OpenRouter API key and model configuration stored with AndroidX EncryptedSharedPreferences.
+- One-tap sharing of the current chat through Android's share sheet.
+- Separate control to clear saved memory without deleting chat history.
+- Improved Telugu voice-input recovery with clearer Android speech-service error messages.
 - Existing premium dark neon Compose UI retained.
 
 ### Phase 2 planned
