@@ -7,7 +7,7 @@ import org.junit.Test
 class OcrLanguageConfigTest {
     @Test
     fun enablesTeluguAndEnglishTogether() {
-        assertEquals("eng+tel", OcrLanguageConfig.LANGUAGES)
+        assertEquals("tel+eng", OcrLanguageConfig.LANGUAGES)
         assertTrue(OcrLanguageConfig.modelUrls.containsKey("eng"))
         assertTrue(OcrLanguageConfig.modelUrls.containsKey("tel"))
     }
