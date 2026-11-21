@@ -52,6 +52,11 @@ class ZaviAccessibilityService : AccessibilityService() {
         return findScrollable(root)?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) == true
     }
 
+    fun scrollBackward(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        return findScrollable(root)?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) == true
+    }
+
     fun setTextOnFocusedField(value: String): Boolean {
         val root = rootInActiveWindow ?: return false
         val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return false
@@ -87,6 +92,7 @@ class ZaviAccessibilityService : AccessibilityService() {
 
         fun clickText(label: String): Boolean = instance?.clickVisibleText(label) == true
         fun scrollDown(): Boolean = instance?.scrollForward() == true
+        fun scrollUp(): Boolean = instance?.scrollBackward() == true
         fun typeInFocusedField(value: String): Boolean = instance?.setTextOnFocusedField(value) == true
         fun tap(x: Float, y: Float): Boolean = instance?.tapScreen(x, y) == true
     }
